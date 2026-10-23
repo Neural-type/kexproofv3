@@ -19,7 +19,7 @@
 @property (nonatomic, copy) NSArray<NSString *> *sectionTitles;
 @property (nonatomic, copy, nullable) NSString *runningModuleID;
 @property (nonatomic, assign) BOOL jobRunning;
-@property (nonatomic) dispatch_queue_t workQueue;
+@property (nonatomic, strong) dispatch_queue_t workQueue;
 @end
 
 @implementation KPViewController
@@ -133,8 +133,8 @@
     stack.translatesAutoresizingMaskIntoConstraints = NO;
     stack.axis = UILayoutConstraintAxisVertical;
     stack.spacing = 12;
-    [stack setCustomSpacing:16 after:targetLabel];
-    [stack setCustomSpacing:14 after:self.statusView];
+    [stack setCustomSpacing:16 afterView:targetLabel];
+    [stack setCustomSpacing:14 afterView:self.statusView];
     [self.headerView addSubview:stack];
 
     [NSLayoutConstraint activateConstraints:@[
