@@ -1,0 +1,8 @@
+Package: com.stealth.kexproofv3
+Name: KexProofV3
+Description: Clean Objective-C research workbench for iOS 27 kernel bug testing.
+Maintainer: YellU
+Author: YellU
+Section: Utilities
+Architecture: iphoneos-arm64
+Version: 3.0.0

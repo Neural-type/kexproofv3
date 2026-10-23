@@ -1,0 +1,13 @@
+.DS_Store
+.theos/
+packages/
+out/
+*.deb
+*.ipa
+*.zip
+*.log
+kexproofv3-share-*.txt
+Resources/kernelcache
+Resources/*.img4
+Resources/*.bin
+Resources/*.im4p
