@@ -1,5 +1,6 @@
 #import "KPViewController.h"
 #import "KPDeviceInfoModule.h"
+#import "KPIOSurfaceProbeModule.h"
 #import "KPLog.h"
 #import "KPLogViewController.h"
 #import "KPReportStore.h"
@@ -57,11 +58,7 @@
                                             subtitle:@"TLBI invalidation and SPTM remapping research"
                                                 icon:@"memorychip"
                                              details:@"SPTM translation invalidation, remap sequencing and validation hooks."],
-        [[KPStubTestModule alloc] initWithIdentifier:@"iosurface.probe"
-                                               title:@"IOSurface Probe"
-                                            subtitle:@"IOSurface creation, properties and mapping surface"
-                                                icon:@"rectangle.on.rectangle"
-                                             details:@"IOSurface user-client probe integration point for iOS 27 research."],
+        [[KPIOSurfaceProbeModule alloc] init],
         [[KPStubTestModule alloc] initWithIdentifier:@"iogpu.perform-mappings"
                                                title:@"IOGPU performMappings Probe"
                                             subtitle:@"GPU mapping selector and argument validation"
@@ -106,7 +103,7 @@
     self.statusView = [[KPStatusView alloc] init];
     [self.statusView updateWithState:KPStatusStateIdle
                                title:@"Ready"
-                              detail:@"2 system checks and 5 clean probe integration points"];
+                              detail:@"2 system checks · IOSurface reachability · 4 stub modules"];
 
     self.runButton = [UIButton buttonWithType:UIButtonTypeSystem];
     self.runButton.translatesAutoresizingMaskIntoConstraints = NO;
@@ -265,7 +262,7 @@
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (section == KPTestSectionKernelProbes) {
-        return @"Probe modules are clean integration points. They return NOT IMPLEMENTED and perform no kernel operations.";
+        return @"Defaults are non-destructive. IOSurface performs open/start/stop only; remaining probes return NOT IMPLEMENTED.";
     }
     return nil;
 }
