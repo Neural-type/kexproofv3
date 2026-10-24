@@ -59,6 +59,7 @@
                                                 icon:@"memorychip"
                                              details:@"SPTM translation invalidation, remap sequencing and validation hooks."],
         [[KPIOSurfaceProbeModule alloc] init],
+        [[KPIOSurfaceProbeModule alloc] initWithArmed:YES],
         [[KPStubTestModule alloc] initWithIdentifier:@"iogpu.perform-mappings"
                                                title:@"IOGPU performMappings Probe"
                                             subtitle:@"GPU mapping selector and argument validation"
@@ -186,7 +187,13 @@
 }
 
 - (void)runAllTapped {
-    if (!self.jobRunning) [self startModules:self.modules];
+    if (self.jobRunning) return;
+    NSMutableArray<id<KPTestModule>> *safeModules = [NSMutableArray arrayWithCapacity:self.modules.count];
+    for (id<KPTestModule> module in self.modules) {
+        if ([module.identifier isEqualToString:@"iosurface.race"]) continue;
+        [safeModules addObject:module];
+    }
+    [self startModules:safeModules];
 }
 
 - (void)startModules:(NSArray<id<KPTestModule>> *)modules {

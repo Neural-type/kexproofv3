@@ -313,12 +313,24 @@ static BOOL KPIOSurfaceRaceRequested(void) {
 @implementation KPIOSurfaceProbeModule
 
 - (instancetype)init {
+    return [self initWithArmed:NO];
+}
+
+- (instancetype)initWithArmed:(BOOL)armed {
     self = [super init];
     if (self) {
-        _identifier = @"iosurface.probe";
-        _title = @"IOSurface 27 Probe";
-        _subtitle = @"Open/start/stop reachability; notify/stop race is double opt-in";
-        _icon = @"rectangle.on.rectangle";
+        _armed = armed;
+        if (armed) {
+            _identifier = @"iosurface.race";
+            _title = @"IOSurface 27 Race";
+            _subtitle = @"ARMED notify/stop race — may panic the kernel";
+            _icon = @"exclamationmark.triangle";
+        } else {
+            _identifier = @"iosurface.probe";
+            _title = @"IOSurface 27 Probe";
+            _subtitle = @"Open/start/stop reachability; notify/stop race is double opt-in";
+            _icon = @"rectangle.on.rectangle";
+        }
         _section = KPTestSectionKernelProbes;
     }
     return self;
@@ -348,12 +360,16 @@ static BOOL KPIOSurfaceRaceRequested(void) {
     [report appendString:@"Baseline: open/start/stop succeeded; no selector was called and no surface was created.\n"];
 
 #if KP_IOSURFACE27_ENABLE_RACE
+    if (self.isArmed) {
+        [report appendString:@"Race: ARMED via dedicated IOSurface 27 Race module.\n"];
+        return KPIOSurfaceRunRace(report);
+    }
     if (KPIOSurfaceRaceRequested()) {
         return KPIOSurfaceRunRace(report);
     }
-    [report appendString:@"Race: built in, but disabled at runtime (enable the IOSurface race switch or set KEXPROOF_IOSURFACE27_RACE=YES).\n"];
+    [report appendString:@"Race: built in, but disabled at runtime (use the IOSurface 27 Race module, the race switch, or KEXPROOF_IOSURFACE27_RACE=YES).\n"];
 #else
-    [report appendString:@"Race: NOT COMPILED (requires KP_IOSURFACE27_ENABLE_RACE=1 at build and KEXPROOF_IOSURFACE27_RACE=YES at runtime).\n"];
+    [report appendString:@"Race: NOT COMPILED (requires KP_IOSURFACE27_ENABLE_RACE=1 at build and an armed run).\n"];
 #endif
     return report;
 }
