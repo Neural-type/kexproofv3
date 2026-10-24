@@ -302,6 +302,9 @@ static NSString *KPIOSurfaceRunRace(NSMutableString *report) {
 }
 
 static BOOL KPIOSurfaceRaceRequested(void) {
+    if ([NSUserDefaults.standardUserDefaults boolForKey:@"KexProofIOSurfaceRaceEnabled"]) {
+        return YES;
+    }
     NSString *value = NSProcessInfo.processInfo.environment[@"KEXPROOF_IOSURFACE27_RACE"];
     return [value isEqualToString:@"YES"];
 }
@@ -348,7 +351,7 @@ static BOOL KPIOSurfaceRaceRequested(void) {
     if (KPIOSurfaceRaceRequested()) {
         return KPIOSurfaceRunRace(report);
     }
-    [report appendString:@"Race: built in, but disabled at runtime (set KEXPROOF_IOSURFACE27_RACE=YES to opt in).\n"];
+    [report appendString:@"Race: built in, but disabled at runtime (enable the IOSurface race switch or set KEXPROOF_IOSURFACE27_RACE=YES).\n"];
 #else
     [report appendString:@"Race: NOT COMPILED (requires KP_IOSURFACE27_ENABLE_RACE=1 at build and KEXPROOF_IOSURFACE27_RACE=YES at runtime).\n"];
 #endif

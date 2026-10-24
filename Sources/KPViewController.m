@@ -262,9 +262,19 @@
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (section == KPTestSectionKernelProbes) {
-        return @"Defaults are non-destructive. IOSurface performs open/start/stop only; remaining probes return NOT IMPLEMENTED.";
+        return @"Defaults are non-destructive. IOSurface performs open/start/stop only; the red switch arms the notify/stop race (requires a race-enabled build, may panic the kernel). Remaining probes return NOT IMPLEMENTED.";
     }
     return nil;
+}
+
+- (void)iosurfaceRaceSwitchChanged:(UISwitch *)sender {
+    [NSUserDefaults.standardUserDefaults setBool:sender.isOn forKey:@"KexProofIOSurfaceRaceEnabled"];
+    NSString *detail = sender.isOn
+        ? @"Next IOSurface 27 Probe run will execute the notify/stop race (race-enabled build only). The kernel may panic."
+        : @"IOSurface 27 Probe is back to open/start/stop reachability only.";
+    [self.statusView updateWithState:sender.isOn ? KPStatusStateRunning : KPStatusStateIdle
+                               title:sender.isOn ? @"Race Armed" : @"Race Disarmed"
+                              detail:detail];
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -288,6 +298,16 @@
 
     id<KPTestModule> module = self.groupedModules[(NSUInteger)indexPath.section][(NSUInteger)indexPath.row];
     [cell configureWithTitle:module.title subtitle:module.subtitle icon:module.icon showsPlay:YES];
+    if ([module.identifier isEqualToString:@"iosurface.probe"]) {
+        UISwitch *raceSwitch = [[UISwitch alloc] init];
+        raceSwitch.on = [NSUserDefaults.standardUserDefaults boolForKey:@"KexProofIOSurfaceRaceEnabled"];
+        raceSwitch.onTintColor = UIColor.systemRedColor;
+        raceSwitch.accessibilityLabel = @"Enable IOSurface notify/stop race";
+        [raceSwitch addTarget:self action:@selector(iosurfaceRaceSwitchChanged:) forControlEvents:UIControlEventValueChanged];
+        cell.accessoryView = raceSwitch;
+    } else {
+        cell.accessoryView = nil;
+    }
     BOOL running = self.jobRunning && [self.runningModuleID isEqualToString:module.identifier];
     [cell setRunning:running];
     [cell setModuleEnabled:!self.jobRunning];
