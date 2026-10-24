@@ -1,6 +1,7 @@
 #import "KPViewController.h"
 #import "KPDeviceInfoModule.h"
 #import "KPIOSurfaceProbeModule.h"
+#import "KPIOAudioCodecsProbeModule.h"
 #import "KPLog.h"
 #import "KPLogViewController.h"
 #import "KPReportStore.h"
@@ -60,6 +61,8 @@
                                              details:@"SPTM translation invalidation, remap sequencing and validation hooks."],
         [[KPIOSurfaceProbeModule alloc] init],
         [[KPIOSurfaceProbeModule alloc] initWithArmed:YES],
+        [[KPIOAudioCodecsProbeModule alloc] init],
+        [[KPIOAudioCodecsProbeModule alloc] initWithArmed:YES],
         [[KPStubTestModule alloc] initWithIdentifier:@"iogpu.perform-mappings"
                                                title:@"IOGPU performMappings Probe"
                                             subtitle:@"GPU mapping selector and argument validation"
@@ -104,7 +107,7 @@
     self.statusView = [[KPStatusView alloc] init];
     [self.statusView updateWithState:KPStatusStateIdle
                                title:@"Ready"
-                              detail:@"2 system checks · IOSurface reachability · 4 stub modules"];
+                              detail:@"2 system checks · IOSurface + IOAudioCodecs reachability · 4 stub modules"];
 
     self.runButton = [UIButton buttonWithType:UIButtonTypeSystem];
     self.runButton.translatesAutoresizingMaskIntoConstraints = NO;
@@ -191,6 +194,7 @@
     NSMutableArray<id<KPTestModule>> *safeModules = [NSMutableArray arrayWithCapacity:self.modules.count];
     for (id<KPTestModule> module in self.modules) {
         if ([module.identifier isEqualToString:@"iosurface.race"]) continue;
+        if ([module.identifier isEqualToString:@"ioaudio27.panic"]) continue;
         [safeModules addObject:module];
     }
     [self startModules:safeModules];
@@ -269,7 +273,7 @@
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (section == KPTestSectionKernelProbes) {
-        return @"Defaults are non-destructive. IOSurface performs open/start/stop only; the red switch arms the notify/stop race (requires a race-enabled build, may panic the kernel). Remaining probes return NOT IMPLEMENTED.";
+        return @"Defaults are non-destructive. IOSurface performs open/start/stop; IOAudioCodecs runs benign format negotiation and conversion only. Dedicated armed rows may panic the kernel and are excluded from Run All. Remaining probes return NOT IMPLEMENTED.";
     }
     return nil;
 }
