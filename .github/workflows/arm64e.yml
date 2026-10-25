@@ -2,11 +2,6 @@ name: arm64e build
 
 on:
   workflow_dispatch:
-    inputs:
-      race:
-        description: 'Compile armed IOSurface and IOAudioCodecs probes'
-        type: boolean
-        default: false
   push:
     branches: [ main ]
 
@@ -30,9 +25,6 @@ jobs:
         env:
           THEOS: /Users/runner/theos
         run: |
-          if [ "${{ inputs.race }}" = "true" ]; then
-            sed -i '' 's/^KexProofV3_CFLAGS = /KexProofV3_CFLAGS = -DKP_IOSURFACE27_ENABLE_RACE=1 -DKP_IOAUDIO27_ENABLE_ARMED=1 /' Makefile
-          fi
           make package FINALPACKAGE=1 THEOS="$THEOS"
 
       - name: Sign + package IPA
@@ -52,11 +44,9 @@ jobs:
           mkdir -p out/Payload
           cp -R "$(dirname "$BIN")" out/Payload/
           ldid -SResources/entitlements.plist "$BIN" || true
-          IPA=KexProofV3-arm64e.ipa
-          if [ "${{ inputs.race }}" = "true" ]; then IPA=KexProofV3-arm64e-race.ipa; fi
-          (cd out && zip -qr "$IPA" Payload)
+          (cd out && zip -qr KexProofV3-arm64e.ipa Payload)
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.race && 'KexProofV3-arm64e-race' || 'KexProofV3-arm64e' }}
-          path: out/*.ipa
+          name: KexProofV3-arm64e
+          path: out/KexProofV3-arm64e.ipa
