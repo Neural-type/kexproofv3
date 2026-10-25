@@ -151,7 +151,7 @@ static void KPM2ScalerReleaseSurfaces(KPM2ScalerSurfaces *surfaces, NSMutableStr
 
 static BOOL KPM2ScalerCreateSurfaces(KPM2ScalerSurfaces *surfaces, NSMutableString *report) {
     memset(surfaces, 0, sizeof(*surfaces));
-    io_service_t service = IOServiceGetMatchingService(kIOMainPortDefault,
+    io_service_t service = IOServiceGetMatchingService(kIOMasterPortDefault,
                                                         IOServiceMatching("IOSurfaceRoot"));
     if (service == IO_OBJECT_NULL) {
         [report appendString:@"  IOSurfaceRoot not found; no M2 selector was called.\n"];
@@ -468,7 +468,7 @@ static void KPM2ScalerRunArmed(NSMutableString *report,
 #endif
 
 static void KPM2ScalerRunSession(NSMutableString *report, BOOL armed) {
-    io_service_t service = IOServiceGetMatchingService(kIOMainPortDefault,
+    io_service_t service = IOServiceGetMatchingService(kIOMasterPortDefault,
                                                         IOServiceMatching("AppleM2ScalerCSCDriver"));
     if (service == IO_OBJECT_NULL) {
         [report appendString:@"  AppleM2ScalerCSCDriver not found: environmental reachability result, not a bug-absence verdict.\n"];
