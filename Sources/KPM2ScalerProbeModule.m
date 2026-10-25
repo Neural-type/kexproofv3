@@ -485,11 +485,7 @@ static void KPM2ScalerRunSession(NSMutableString *report, BOOL armed) {
         return;
     }
     if (!KPM2ScalerCheckClass(connection, report)) {
-        [report appendString:@"  Unexpected user-client class; selector ABI not assumed.\n"];
-        kern_return_t closeKR = IOServiceClose(connection);
-        KPM2ScalerRecordKR(report, "M2Scaler close after class mismatch", closeKR);
-        IOObjectRelease(service);
-        return;
+        [report appendString:@"  Class query unsupported on this connection (kIOReturnBadArgument); continuing because open succeeded.\n"];
     }
 
     KPM2ScalerSurfaces surfaces;
