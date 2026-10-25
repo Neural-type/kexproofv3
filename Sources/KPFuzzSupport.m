@@ -148,7 +148,7 @@ void KPFuzzReproFinish(KPFuzzRepro *repro) {
 }
 
 static kern_return_t KPFuzzOpenSimple(const char *serviceName, uint32_t type) {
-    io_service_t service = IOServiceGetMatchingService(kIOMasterPortDefault,
+    io_service_t service = IOServiceGetMatchingService(MACH_PORT_NULL,
                                                         IOServiceMatching(serviceName));
     if (service == IO_OBJECT_NULL) return kIOReturnNoDevice;
     io_connect_t connection = IO_OBJECT_NULL;
@@ -162,7 +162,7 @@ static kern_return_t KPFuzzOpenFastPath(io_connect_t *connection) {
     CFMutableDictionaryRef matching = IOServiceMatching("IOHIDEventService");
     if (!matching) return kIOReturnBadArgument;
     io_iterator_t iterator = IO_OBJECT_NULL;
-    kern_return_t kr = IOServiceGetMatchingServices(kIOMasterPortDefault, matching, &iterator);
+    kern_return_t kr = IOServiceGetMatchingServices(MACH_PORT_NULL, matching, &iterator);
     if (kr != KERN_SUCCESS) return kr;
     kern_return_t lastError = kIOReturnNoDevice;
     io_service_t service = IO_OBJECT_NULL;
