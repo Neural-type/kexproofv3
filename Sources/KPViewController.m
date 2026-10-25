@@ -4,6 +4,7 @@
 #import "KPIOSurfaceProbeModule.h"
 #import "KPIOAudioCodecsProbeModule.h"
 #import "KPM2ScalerProbeModule.h"
+#import "KPFuzzModule.h"
 #import "KPLog.h"
 #import "KPLogViewController.h"
 #import "KPReportStore.h"
@@ -47,7 +48,7 @@
     [self configureTable];
     [self updateRunButton];
 
-    NSString *version = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.0.0";
+    NSString *version = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.1.0";
     [KPLog.shared appendFormat:@"=== KexProofV3 %@ started @ %@ ===", version, [NSDate date]];
     [KPLog.shared append:@"Clean iOS 27 research workbench. No exploit engine or legacy binary resources bundled."];
 }
@@ -73,7 +74,9 @@
                                                 icon:@"checkmark.shield"
                                              details:@"AMFI DER entitlement input generation and trust-validation hooks."],
         [[KPM2ScalerProbeModule alloc] init],
-        [[KPM2ScalerProbeModule alloc] initWithArmed:YES]
+        [[KPM2ScalerProbeModule alloc] initWithArmed:YES],
+        [[KPFuzzModule alloc] initWithArmed:NO],
+        [[KPFuzzModule alloc] initWithArmed:YES]
     ];
     NSMutableArray<NSMutableArray<id<KPTestModule>> *> *groups = [NSMutableArray arrayWithCapacity:self.sectionTitles.count];
     for (NSUInteger index = 0; index < self.sectionTitles.count; index++) {
@@ -89,7 +92,7 @@
     self.headerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 390, 260)];
 
     UILabel *versionLabel = [[UILabel alloc] init];
-    NSString *version = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.0.0";
+    NSString *version = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.1.0";
     versionLabel.text = [NSString stringWithFormat:@"KexProofV3 · %@", version];
     versionLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
     versionLabel.textColor = UIColor.labelColor;
@@ -103,7 +106,7 @@
     self.statusView = [[KPStatusView alloc] init];
     [self.statusView updateWithState:KPStatusStateIdle
                                title:@"Ready"
-                              detail:@"2 system checks · IOSurface + IOAudioCodecs + M2Scaler + AGX spill · 2 stub modules"];
+                              detail:@"2 system checks · probes + fuzzer info · armed rows excluded from Run All"];
 
     self.runButton = [UIButton buttonWithType:UIButtonTypeSystem];
     self.runButton.translatesAutoresizingMaskIntoConstraints = NO;
@@ -193,6 +196,7 @@
         if ([module.identifier isEqualToString:@"ioaudio27.panic"]) continue;
         if ([module.identifier isEqualToString:@"m2scaler27.race"]) continue;
         if ([module.identifier isEqualToString:@"agx27.spill.armed"]) continue;
+        if ([module.identifier isEqualToString:@"iokit.fuzzer.armed"]) continue;
         [safeModules addObject:module];
     }
     [self startModules:safeModules];
@@ -271,7 +275,7 @@
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (section == KPTestSectionKernelProbes) {
-        return @"Defaults are non-destructive. IOSurface performs open/start/stop; IOAudioCodecs runs benign format negotiation and conversion only. Dedicated armed rows may panic the kernel and are excluded from Run All. Remaining probes return NOT IMPLEMENTED.";
+        return @"Defaults are non-destructive. Fuzzer info returns the bounded target plan only. Dedicated armed rows, including IOKit Fuzzer, may panic the kernel and are excluded from Run All. Remaining probes return NOT IMPLEMENTED.";
     }
     return nil;
 }

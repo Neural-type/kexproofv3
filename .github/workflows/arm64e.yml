@@ -20,6 +20,24 @@ jobs:
           mkdir -p /Users/runner/theos/bin && curl -sL https://raw.githubusercontent.com/theos/dm.pl/master/dm.pl -o /Users/runner/theos/bin/dm.pl && chmod +x /Users/runner/theos/bin/dm.pl
           brew install ldid
 
+      - name: Objective-C syntax check
+        working-directory: .
+        run: |
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          "$(xcrun --find clang)" -fsyntax-only \
+            -target arm64-apple-ios15.0 \
+            -isysroot "$SDK" \
+            -fobjc-arc -Wall -Wextra -Wno-error -Wno-deprecated-declarations \
+            -F"$SDK/System/Library/Frameworks" \
+            -F"$SDK/System/Library/PrivateFrameworks" \
+            -ISources \
+            -DKP_IOSURFACE27_ENABLE_RACE=1 \
+            -DKP_IOAUDIO27_ENABLE_ARMED=1 \
+            -DKP_M2SCALER27_ENABLE_ARMED=1 \
+            -DKP_AGXSPILL27_ENABLE_ARMED=1 \
+            -DKP_IOKIT_FUZZER_ENABLE_ARMED=1 \
+            Sources/*.m
+
       - name: Build KexProofV3 (arm64e)
         working-directory: .
         env:
@@ -45,6 +63,21 @@ jobs:
           cp -R "$(dirname "$BIN")" out/Payload/
           ldid -SResources/entitlements.plist "$BIN" || true
           (cd out && zip -qr KexProofV3-arm64e.ipa Payload)
+
+      - name: Verify arm64e and symbols
+        working-directory: .
+        run: |
+          BIN="$(find .theos/_ -path '*/KexProofV3.app/KexProofV3' -type f | head -1)"
+          test -f "$BIN"
+          python3 - "$BIN" <<'EOF'
+          import struct, sys
+          d = open(sys.argv[1], 'rb').read(12)
+          cputype, subtype = struct.unpack('<II', d[4:12])
+          assert cputype == 0x100000C, hex(cputype)
+          assert subtype == 0x80000002, hex(subtype)
+          EOF
+          nm -a "$BIN" | grep -E 'KPFuzz(Module|Plan|Support)|KPViewController' >/dev/null
+          file "$BIN"
 
       - uses: actions/upload-artifact@v4
         with:
