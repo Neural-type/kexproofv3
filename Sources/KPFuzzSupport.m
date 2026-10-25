@@ -147,39 +147,16 @@ void KPFuzzReproFinish(KPFuzzRepro *repro) {
     }
 }
 
-static kern_return_t KPFuzzOpenSimple(const char *serviceName, uint32_t type) {
+static kern_return_t KPFuzzOpenSimple(const char *serviceName, uint32_t type, io_connect_t *connection) {
+    if (!connection) return kIOReturnBadArgument;
+    *connection = IO_OBJECT_NULL;
     io_service_t service = IOServiceGetMatchingService(MACH_PORT_NULL,
                                                         IOServiceMatching(serviceName));
     if (service == IO_OBJECT_NULL) return kIOReturnNoDevice;
-    io_connect_t connection = IO_OBJECT_NULL;
-    kern_return_t kr = IOServiceOpen(service, mach_task_self(), type, &connection);
+    kern_return_t kr = IOServiceOpen(service, mach_task_self(), type, connection);
     IOObjectRelease(service);
-    return kr == KERN_SUCCESS ? (kern_return_t)connection : kr;
-}
-
-static kern_return_t KPFuzzOpenFastPath(io_connect_t *connection) {
-    *connection = IO_OBJECT_NULL;
-    CFMutableDictionaryRef matching = IOServiceMatching("IOHIDEventService");
-    if (!matching) return kIOReturnBadArgument;
-    io_iterator_t iterator = IO_OBJECT_NULL;
-    kern_return_t kr = IOServiceGetMatchingServices(MACH_PORT_NULL, matching, &iterator);
-    if (kr != KERN_SUCCESS) return kr;
-    kern_return_t lastError = kIOReturnNoDevice;
-    io_service_t service = IO_OBJECT_NULL;
-    while ((service = IOIteratorNext(iterator)) != IO_OBJECT_NULL) {
-        io_connect_t candidate = IO_OBJECT_NULL;
-        kern_return_t openKR = IOServiceOpen(service, mach_task_self(), 2, &candidate);
-        IOObjectRelease(service);
-        if (openKR == KERN_SUCCESS && candidate != IO_OBJECT_NULL) {
-            *connection = candidate;
-            IOObjectRelease(iterator);
-            return KERN_SUCCESS;
-        }
-        if (candidate != IO_OBJECT_NULL) IOServiceClose(candidate);
-        lastError = openKR;
-    }
-    IOObjectRelease(iterator);
-    return lastError;
+    if (kr == KERN_SUCCESS && *connection == IO_OBJECT_NULL) return kIOReturnNoDevice;
+    return kr;
 }
 
 static kern_return_t KPFuzzOpenAGX(io_connect_t *connection) {
@@ -190,23 +167,30 @@ static kern_return_t KPFuzzOpenAGX(io_connect_t *connection) {
     for (uint32_t nameIndex = 0; nameIndex < 3; nameIndex++) {
         for (uint32_t typeIndex = 0; typeIndex < 2; typeIndex++) {
             uint32_t type = (firstTypes[nameIndex] + typeIndex) & 1;
-            kern_return_t result = KPFuzzOpenSimple(names[nameIndex], type);
-            if (result > 0) {
-                *connection = (io_connect_t)result;
+            io_connect_t candidate = IO_OBJECT_NULL;
+            kern_return_t kr = KPFuzzOpenSimple(names[nameIndex], type, &candidate);
+            if (kr == KERN_SUCCESS && candidate != IO_OBJECT_NULL) {
+                *connection = candidate;
                 return KERN_SUCCESS;
             }
-            lastError = result;
+            if (candidate != IO_OBJECT_NULL) IOServiceClose(candidate);
+            lastError = kr;
         }
     }
     return lastError;
 }
 
-static kern_return_t KPFuzzOpenFamily(KPFuzzFamily family, io_connect_t *connection) {
+static kern_return_t KPFuzzOpenFamily(KPFuzzFamily family, io_service_t fastPathService, io_connect_t *connection) {
     *connection = IO_OBJECT_NULL;
     if (family == KPFuzzFamilyIOGPU) return KPFuzzOpenAGX(connection);
-    if (family == KPFuzzFamilyFastPath) return KPFuzzOpenFastPath(connection);
+    if (family == KPFuzzFamilyFastPath) {
+        if (fastPathService == IO_OBJECT_NULL) return kIOReturnNoDevice;
+        kern_return_t kr = IOServiceOpen(fastPathService, mach_task_self(), 2, connection);
+        if (kr == KERN_SUCCESS && *connection == IO_OBJECT_NULL) return kIOReturnNoDevice;
+        return kr;
+    }
     return KPFuzzOpenSimple(KPFuzzFamilyService(family).UTF8String,
-                            KPFuzzFamilyOpenType(family));
+                            KPFuzzFamilyOpenType(family), connection);
 }
 
 typedef struct {
@@ -381,9 +365,55 @@ static kern_return_t KPFuzzFastPathOpenGate(io_connect_t connection) {
                                NULL, NULL, NULL, NULL);
 }
 
-kern_return_t KPFuzzSessionStart(const KPFuzzSelectorPlan *plan, KPFuzzSession *session, NSMutableString *report) {
+kern_return_t KPFuzzFastPathSelectService(io_service_t *selectedService, uint32_t *selectedIndex, NSMutableString *report) {
+    if (!selectedService) return kIOReturnBadArgument;
+    *selectedService = IO_OBJECT_NULL;
+    if (selectedIndex) *selectedIndex = 0;
+    CFMutableDictionaryRef matching = IOServiceMatching("IOHIDEventService");
+    if (!matching) return kIOReturnBadArgument;
+    io_iterator_t iterator = IO_OBJECT_NULL;
+    kern_return_t kr = IOServiceGetMatchingServices(MACH_PORT_NULL, matching, &iterator);
+    if (kr != KERN_SUCCESS || iterator == IO_OBJECT_NULL) {
+        if (iterator != IO_OBJECT_NULL) IOObjectRelease(iterator);
+        return kr == KERN_SUCCESS ? kIOReturnNoDevice : kr;
+    }
+    kern_return_t lastError = kIOReturnNoDevice;
+    uint32_t tried = 0;
+    io_service_t service = IO_OBJECT_NULL;
+    while (tried < 32 && (service = IOIteratorNext(iterator)) != IO_OBJECT_NULL) {
+        tried++;
+        io_connect_t candidate = IO_OBJECT_NULL;
+        kern_return_t openKR = IOServiceOpen(service, mach_task_self(), 2, &candidate);
+        if (openKR == KERN_SUCCESS && candidate != IO_OBJECT_NULL) {
+            kern_return_t gateKR = KPFuzzFastPathOpenGate(candidate);
+            [report appendFormat:@"  setup: FastPath instance=%u baseline sel0 kr=0x%08x%s\n",
+             tried, (uint32_t)gateKR,
+             gateKR == kIOReturnExclusiveAccess ? " (exclusive/busy; trying next)" : ""];
+            if (gateKR == KERN_SUCCESS) {
+                IOServiceClose(candidate);
+                *selectedService = service;
+                if (selectedIndex) *selectedIndex = tried;
+                IOObjectRelease(iterator);
+                return KERN_SUCCESS;
+            }
+            lastError = gateKR;
+        } else {
+            lastError = openKR == KERN_SUCCESS ? kIOReturnNoDevice : openKR;
+            [report appendFormat:@"  setup: FastPath instance=%u IOServiceOpen kr=0x%08x\n",
+             tried, (uint32_t)lastError];
+        }
+        if (candidate != IO_OBJECT_NULL) IOServiceClose(candidate);
+        IOObjectRelease(service);
+    }
+    IOObjectRelease(iterator);
+    [report appendFormat:@"  setup: no FastPath baseline-capable service among %u instances, last kr=0x%08x\n",
+     tried, (uint32_t)lastError];
+    return lastError;
+}
+
+kern_return_t KPFuzzSessionStart(const KPFuzzSelectorPlan *plan, io_service_t fastPathService, KPFuzzSession *session, NSMutableString *report) {
     memset((void *)session, 0, sizeof(*session));
-    kern_return_t kr = KPFuzzOpenFamily(plan->family, &session->connection);
+    kern_return_t kr = KPFuzzOpenFamily(plan->family, fastPathService, &session->connection);
     if (kr != KERN_SUCCESS || session->connection == IO_OBJECT_NULL) {
         [report appendFormat:@"  setup: open %s type=%u failed kr=0x%08x\n",
          KPFuzzFamilyService(plan->family).UTF8String,
@@ -411,12 +441,8 @@ kern_return_t KPFuzzSessionStart(const KPFuzzSelectorPlan *plan, KPFuzzSession *
             break;
         case KPFuzzSelectorM2Submit:
         case KPFuzzSelectorM2Credit: {
-            kern_return_t openResult = KPFuzzOpenSimple("IOSurfaceRoot", 0);
-            if (openResult <= 0) {
-                kr = openResult;
-                break;
-            }
-            session->surfaceConnection = (io_connect_t)openResult;
+            kr = KPFuzzOpenSimple("IOSurfaceRoot", 0, &session->surfaceConnection);
+            if (kr != KERN_SUCCESS) break;
             kr = KPFuzzCreateSurface(session->surfaceConnection, 32, 32, &session->sourceID);
             if (kr == KERN_SUCCESS) {
                 kr = KPFuzzCreateSurface(session->surfaceConnection, 32, 32, &session->destID);
@@ -650,12 +676,8 @@ static void KPFuzzApplyFieldPolicies(const KPFuzzSelectorPlan *plan,
             KPFuzzPut32(call->structInput, 0, iteration % 4);
             break;
         case KPFuzzSelectorFastPathCopy:
-            if (iteration == 0) {
-                call->structOutputCapacity = 256;
-            } else {
-                call->structOutputCapacity = KPFuzzVariableLengths[KPFuzzNext(state) %
-                    (sizeof(KPFuzzVariableLengths) / sizeof(KPFuzzVariableLengths[0]))];
-            }
+            call->structOutputCapacity = KPFuzzVariableLengths[KPFuzzNext(state) %
+                (sizeof(KPFuzzVariableLengths) / sizeof(KPFuzzVariableLengths[0]))];
             call->structOutputCount = call->structOutputCapacity;
             break;
         case KPFuzzSelectorJPEGDecode:
@@ -758,8 +780,8 @@ void KPFuzzPrepareCall(const KPFuzzSelectorPlan *plan, NSUInteger planIndex, con
             call->scalarInput[0] = 0;
             call->scalarInput[1] = 1;
             call->structInputCount = 0;
-            call->structOutputCapacity = 256;
-            call->structOutputCount = 256;
+            call->structOutputCapacity = KPFuzzMaxStructSize;
+            call->structOutputCount = KPFuzzMaxStructSize;
             variableLength = YES;
             break;
         case KPFuzzSelectorJPEGDecode:
@@ -784,9 +806,11 @@ void KPFuzzPrepareCall(const KPFuzzSelectorPlan *plan, NSUInteger planIndex, con
             break;
         }
     }
-    KPFuzzMutateScalars(call, &state, preserveMask, iteration);
-    KPFuzzMutateBuffer(call, &state, ranges, rangeCount, variableLength, iteration);
-    KPFuzzApplyFieldPolicies(plan, session, iteration, &state, call);
+    if (iteration != 0) {
+        KPFuzzMutateScalars(call, &state, preserveMask, iteration);
+        KPFuzzMutateBuffer(call, &state, ranges, rangeCount, variableLength, iteration);
+        KPFuzzApplyFieldPolicies(plan, session, iteration, &state, call);
+    }
 }
 
 static BOOL KPFuzzReproBegin(const KPFuzzSelectorPlan *plan,
@@ -810,11 +834,11 @@ static BOOL KPFuzzReproBegin(const KPFuzzSelectorPlan *plan,
                      KPFuzzHex(session->jpegData.bytes, session->jpegData.length)];
     }
     NSString *line = [NSString stringWithFormat:
-        @"BEGIN runSeed=0x%016llx callSeed=0x%016llx plan=%lu family=%s kind=%s selector=%u iteration=%u hash=0x%016llx scalarIn=%s structIn=%s structOutCapacity=%zu%@\n",
+        @"BEGIN runSeed=0x%016llx callSeed=0x%016llx plan=%lu family=%s kind=%s selector=%u iteration=%u baseline=%u serviceIndex=%u hash=0x%016llx scalarIn=%s structIn=%s structOutCapacity=%zu%@\n",
         runSeed, callSeed, (unsigned long)planIndex,
         KPFuzzFamilyName(plan->family).UTF8String,
         KPFuzzSelectorKindName(plan->kind).UTF8String,
-        plan->selector, iteration, hash,
+        plan->selector, iteration, iteration == 0, session->serviceIndex, hash,
         KPFuzzHex(call->scalarInput, call->scalarInputCount * sizeof(uint64_t)).UTF8String,
         KPFuzzHex(call->structInput, call->structInputCount).UTF8String,
         call->structOutputCapacity, auxiliary];

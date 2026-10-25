@@ -12,10 +12,11 @@ typedef struct {
     uint32_t planned;
     uint32_t attempted;
     uint32_t succeeded;
+    uint32_t rejected;
     uint32_t failed;
-    uint32_t nack;
     uint32_t skipped;
     uint32_t setupFailed;
+    uint32_t baselineFailed;
     uint32_t statusErrors;
     kern_return_t firstKR;
     kern_return_t lastKR;
@@ -59,7 +60,8 @@ typedef struct {
     [report appendString:@"\nFixed-size ABI is exact. Variable structs are capped at 4096 bytes. Required IDs come from real objects and are preserved. Allocation sizes and enum fields use bounded policies.\n"];
     [report appendString:@"FastPath sel1, JPEG Ext/2024 and privileged/destructive methods are excluded. Cleanup close/release is allowed only for created baselines.\n"];
     [report appendString:@"Repro: Documents/kexproofv3-fuzzer-<timestamp>-<runSeed>.log; BEGIN + full input is fsynced before every call; END follows with kr.\n"];
-    [report appendString:@"NACK codes 0xe00002e2/0xe00002c2 skip the selector once. Eight consecutive errors skip it, three setup failures skip a family, 250 errors abort the run.\n"];
+    [report appendString:@"Iteration 0 is always the unmutated baseline; a baseline failure skips only that selector. Mutated kIOReturnBadArgument and AGX shmem zero-size kIOReturnNoMemory are expected rejections, never NACK skips.\n"];
+    [report appendString:@"Eight consecutive identical hard errors skip a selector, three setup failures skip a family, and 250 hard errors abort. FastPath baselines scan at most 32 services; 0xe00002c5 means exclusive/busy.\n"];
     [report appendString:@"No kernel operation was executed by this info row. No bug verdict is made without device evidence and triage.\n"];
     return report;
 }
@@ -77,8 +79,12 @@ static BOOL KPFuzzNeedsSessionPerIteration(KPFuzzSelectorKind kind) {
     }
 }
 
-static BOOL KPFuzzSpecialNack(kern_return_t kr) {
-    return (uint32_t)kr == 0xe00002e2 || (uint32_t)kr == 0xe00002c2;
+static BOOL KPFuzzExpectedMutationRejection(const KPFuzzSelectorPlan *plan, const KPFuzzCall *call, kern_return_t kr) {
+    if (kr == kIOReturnBadArgument) return YES;
+    return plan->kind == KPFuzzSelectorAGXShmem &&
+           kr == kIOReturnNoMemory &&
+           call->scalarInputCount > 0 &&
+           call->scalarInput[0] == 0;
 }
 
 static void KPFuzzReleaseCreatedSurface(const KPFuzzSession *session, const KPFuzzCall *call) {
@@ -91,11 +97,20 @@ static void KPFuzzReleaseCreatedSurface(const KPFuzzSession *session, const KPFu
                         NULL, NULL, NULL, NULL);
 }
 
+static void KPFuzzLogSelectorStats(const KPFuzzSelectorPlan *plan, const KPFuzzSelectorStats *stats, NSMutableString *report) {
+    [report appendFormat:@"  %-34s sel=%3u planned=%4u attempted=%4u ok=%4u rejected=%4u hardErrors=%4u skipped=%4u setupFailed=%u baselineFailed=%u statusErrors=%u firstKR=0x%08x lastKR=0x%08x\n",
+     KPFuzzSelectorKindName(plan->kind).UTF8String,
+     plan->selector, stats->planned, stats->attempted, stats->succeeded,
+     stats->rejected, stats->failed, stats->skipped, stats->setupFailed,
+     stats->baselineFailed, stats->statusErrors,
+     (uint32_t)stats->firstKR, (uint32_t)stats->lastKR];
+}
+
 static KPFuzzSelectorStats KPFuzzRunSelector(const KPFuzzSelectorPlan *plan,
                                              NSUInteger planIndex,
                                              KPFuzzRepro *repro,
                                              uint64_t runSeed,
-                                             uint32_t *globalErrors,
+                                             uint32_t *globalHardErrors,
                                              NSMutableString *report) {
     KPFuzzSelectorStats stats = {
         .planned = plan->budget,
@@ -104,30 +119,66 @@ static KPFuzzSelectorStats KPFuzzRunSelector(const KPFuzzSelectorPlan *plan,
     };
     KPFuzzSession session;
     memset((void *)&session, 0, sizeof(session));
-    BOOL perIteration = KPFuzzNeedsSessionPerIteration(plan->kind);
-    if (!perIteration) {
-        kern_return_t setupKR = KPFuzzSessionStart(plan, &session, report);
-        if (setupKR != KERN_SUCCESS) {
+    io_service_t fastPathService = IO_OBJECT_NULL;
+    uint32_t fastPathServiceIndex = 0;
+    if (plan->family == KPFuzzFamilyFastPath) {
+        kern_return_t selectKR = KPFuzzFastPathSelectService(&fastPathService, &fastPathServiceIndex, report);
+        if (selectKR != KERN_SUCCESS) {
             stats.setupFailed = 1;
-            (*globalErrors)++;
+            stats.baselineFailed = 1;
             stats.skipped = plan->budget;
-            [report appendFormat:@"  %s sel=%u: setup skipped, kr=0x%08x\n",
+            (*globalHardErrors)++;
+            [report appendFormat:@"  %s sel=%u: FastPath baseline selection failed kr=0x%08x; selector skipped\n",
              KPFuzzSelectorKindName(plan->kind).UTF8String,
-             plan->selector, (uint32_t)setupKR];
+             plan->selector, (uint32_t)selectKR];
+            KPFuzzLogSelectorStats(plan, &stats, report);
             return stats;
         }
     }
-    uint32_t consecutiveErrors = 0;
-    for (uint32_t iteration = 0; iteration < plan->budget && *globalErrors < 250; iteration++) {
+    BOOL perIteration = KPFuzzNeedsSessionPerIteration(plan->kind);
+    if (!perIteration) {
+        kern_return_t setupKR = KPFuzzSessionStart(plan, fastPathService, &session, report);
+        if (setupKR == KERN_SUCCESS) session.serviceIndex = fastPathServiceIndex;
+        if (setupKR != KERN_SUCCESS) {
+            stats.setupFailed = 1;
+            stats.skipped = plan->budget;
+            (*globalHardErrors)++;
+            if (fastPathService != IO_OBJECT_NULL) IOObjectRelease(fastPathService);
+            [report appendFormat:@"  %s sel=%u: setup skipped, kr=0x%08x\n",
+             KPFuzzSelectorKindName(plan->kind).UTF8String,
+             plan->selector, (uint32_t)setupKR];
+            KPFuzzLogSelectorStats(plan, &stats, report);
+            return stats;
+        }
+    }
+    uint32_t consecutiveHardErrors = 0;
+    kern_return_t consecutiveKR = KERN_SUCCESS;
+    for (uint32_t iteration = 0; iteration < plan->budget && *globalHardErrors < 250; iteration++) {
         @autoreleasepool {
             if (perIteration) {
-                kern_return_t setupKR = KPFuzzSessionStart(plan, &session, report);
+                kern_return_t setupKR = KPFuzzSessionStart(plan, fastPathService, &session, report);
                 if (setupKR != KERN_SUCCESS) {
                     stats.setupFailed++;
-                    (*globalErrors)++;
-                    if (stats.setupFailed >= 3) break;
+                    stats.skipped++;
+                    (*globalHardErrors)++;
+                    if (iteration == 0) {
+                        stats.baselineFailed++;
+                        stats.skipped += plan->budget - 1;
+                        [report appendFormat:@"  %s sel=%u: baseline setup failed kr=0x%08x; selector skipped\n",
+                         KPFuzzSelectorKindName(plan->kind).UTF8String,
+                         plan->selector, (uint32_t)setupKR];
+                        break;
+                    }
+                    if (stats.setupFailed >= 3 || *globalHardErrors >= 250) {
+                        stats.skipped += plan->budget - iteration - 1;
+                        [report appendFormat:@"  %s sel=%u: setup threshold; remaining %u iterations skipped\n",
+                         KPFuzzSelectorKindName(plan->kind).UTF8String,
+                         plan->selector, plan->budget - iteration - 1];
+                        break;
+                    }
                     continue;
                 }
+                session.serviceIndex = fastPathServiceIndex;
             }
             if (plan->kind == KPFuzzSelectorIOSurfaceDecrement) {
                 uint64_t baseline[] = {session.surfaceID, 0};
@@ -137,7 +188,8 @@ static KPFuzzSelectorStats KPFuzzRunSelector(const KPFuzzSelectorPlan *plan,
                                                                NULL, NULL, NULL, NULL);
                 if (baselineKR != KERN_SUCCESS) {
                     stats.setupFailed++;
-                    (*globalErrors)++;
+                    stats.skipped += plan->budget - iteration;
+                    (*globalHardErrors)++;
                     if (perIteration) KPFuzzSessionEnd(plan, &session);
                     [report appendFormat:@"  %s: baseline increment failed kr=0x%08x; selector skipped\n",
                      KPFuzzSelectorKindName(plan->kind).UTF8String, (uint32_t)baselineKR];
@@ -154,41 +206,53 @@ static KPFuzzSelectorStats KPFuzzRunSelector(const KPFuzzSelectorPlan *plan,
                 KPFuzzReleaseCreatedSurface(&session, &call);
             }
             if (perIteration) KPFuzzSessionEnd(plan, &session);
-            if (KPFuzzSpecialNack(kr)) {
-                stats.nack++;
-                [report appendFormat:@"  %s sel=%u: NACK kr=0x%08x once; remaining %u iterations skipped\n",
-                 KPFuzzSelectorKindName(plan->kind).UTF8String,
-                 plan->selector, (uint32_t)kr, plan->budget - iteration - 1];
-                stats.skipped += plan->budget - iteration - 1;
-                break;
-            }
             if (kr == KERN_SUCCESS) {
                 stats.succeeded++;
-                consecutiveErrors = 0;
+                consecutiveHardErrors = 0;
+                consecutiveKR = KERN_SUCCESS;
+            } else if (KPFuzzExpectedMutationRejection(plan, &call, kr)) {
+                stats.rejected++;
+                consecutiveHardErrors = 0;
+                consecutiveKR = KERN_SUCCESS;
             } else {
                 stats.failed++;
-                consecutiveErrors++;
-                (*globalErrors)++;
+                (*globalHardErrors)++;
+                if (consecutiveHardErrors && consecutiveKR == kr) {
+                    consecutiveHardErrors++;
+                } else {
+                    consecutiveHardErrors = 1;
+                    consecutiveKR = kr;
+                }
             }
             if (plan->kind == KPFuzzSelectorAGXSubmit && call.scalarOutputCount && call.scalarOutput[0]) {
                 stats.statusErrors++;
-                consecutiveErrors++;
-                (*globalErrors)++;
             }
-            if (consecutiveErrors >= 8) {
+            if (iteration == 0 && kr != KERN_SUCCESS) {
+                stats.baselineFailed++;
+                stats.skipped += plan->budget - 1;
+                [report appendFormat:@"  %s sel=%u: unmutated baseline failed kr=0x%08x; remaining %u iterations skipped\n",
+                 KPFuzzSelectorKindName(plan->kind).UTF8String,
+                 plan->selector, (uint32_t)kr, plan->budget - 1];
+                break;
+            }
+            if (consecutiveHardErrors >= 8) {
                 stats.skipped += plan->budget - iteration - 1;
-                [report appendFormat:@"  %s sel=%u: eight consecutive errors; remaining iterations skipped\n",
+                [report appendFormat:@"  %s sel=%u: eight consecutive identical hard errors kr=0x%08x; remaining iterations skipped\n",
+                 KPFuzzSelectorKindName(plan->kind).UTF8String,
+                 plan->selector, (uint32_t)kr];
+                break;
+            }
+            if (*globalHardErrors >= 250) {
+                stats.skipped += plan->budget - iteration - 1;
+                [report appendFormat:@"  %s sel=%u: global hard-error threshold; remaining iterations skipped\n",
                  KPFuzzSelectorKindName(plan->kind).UTF8String, plan->selector];
                 break;
             }
         }
     }
     if (!perIteration) KPFuzzSessionEnd(plan, &session);
-    [report appendFormat:@"  %-34s sel=%3u planned=%4u attempted=%4u ok=%4u errors=%4u nack=%u skipped=%4u setupFailed=%u statusErrors=%u firstKR=0x%08x lastKR=0x%08x\n",
-     KPFuzzSelectorKindName(plan->kind).UTF8String,
-     plan->selector, stats.planned, stats.attempted, stats.succeeded,
-     stats.failed, stats.nack, stats.skipped, stats.setupFailed,
-     stats.statusErrors, (uint32_t)stats.firstKR, (uint32_t)stats.lastKR];
+    if (fastPathService != IO_OBJECT_NULL) IOObjectRelease(fastPathService);
+    KPFuzzLogSelectorStats(plan, &stats, report);
     return stats;
 }
 
@@ -200,7 +264,7 @@ static KPFuzzSelectorStats KPFuzzRunSelector(const KPFuzzSelectorPlan *plan,
     [report appendFormat:@"Version: %@; target: iPhone16,1 / A17 Pro / iOS 27.0.1\n", KPFuzzBuildVersion];
     [report appendFormat:@"runSeed=0x%016llx; budget=%lu fuzz calls excluding setup/cleanup\n",
      runSeed, (unsigned long)KPFuzzTotalBudget];
-    [report appendString:@"Mode: ARMED explicit-tap only; deterministic SplitMix64-derived inputs; sync calls only; no spray, KRW, async API or race threads.\n"];
+    [report appendString:@"Mode: ARMED explicit-tap only; deterministic SplitMix64-derived inputs; sync calls only; no spray, KRW, async API or race threads. Baseline-first; expected mutation rejections do not consume the hard-error budget.\n"];
     KPFuzzRepro repro;
     NSError *reproError = nil;
     if (!KPFuzzReproStart(&repro, runSeed, &reproError)) {
@@ -208,12 +272,13 @@ static KPFuzzSelectorStats KPFuzzRunSelector(const KPFuzzSelectorPlan *plan,
         return report;
     }
     [report appendFormat:@"Repro: %s\n", repro.path.fileSystemRepresentation];
-    uint32_t globalErrors = 0;
+    uint32_t globalHardErrors = 0;
     uint32_t attempted = 0;
     uint32_t succeeded = 0;
-    uint32_t failed = 0;
-    uint32_t nack = 0;
+    uint32_t rejected = 0;
+    uint32_t hardFailed = 0;
     uint32_t setupFailed = 0;
+    uint32_t baselineFailed = 0;
     uint32_t statusErrors = 0;
     BOOL aborted = NO;
     for (KPFuzzFamily family = 0; family < KPFuzzFamilyCount && !aborted; family++) {
@@ -224,25 +289,28 @@ static KPFuzzSelectorStats KPFuzzRunSelector(const KPFuzzSelectorPlan *plan,
         for (NSUInteger offset = 0; offset < count && !aborted; offset++) {
             NSUInteger planIndex = first + offset;
             const KPFuzzSelectorPlan *plan = &KPFuzzPlans[planIndex];
-            if (familySetupFailures >= 3 || globalErrors >= 250) {
+            if (familySetupFailures >= 3 || globalHardErrors >= 250) {
                 [report appendFormat:@"  %s sel=%u: skipped by family/global threshold\n",
                  KPFuzzSelectorKindName(plan->kind).UTF8String, plan->selector];
                 continue;
             }
-            KPFuzzSelectorStats stats = KPFuzzRunSelector(plan, planIndex, &repro, runSeed, &globalErrors, report);
+            KPFuzzSelectorStats stats = KPFuzzRunSelector(plan, planIndex, &repro, runSeed, &globalHardErrors, report);
             attempted += stats.attempted;
             succeeded += stats.succeeded;
-            failed += stats.failed;
-            nack += stats.nack;
+            rejected += stats.rejected;
+            hardFailed += stats.failed;
             setupFailed += stats.setupFailed;
+            baselineFailed += stats.baselineFailed;
             statusErrors += stats.statusErrors;
             familySetupFailures += stats.setupFailed;
-            aborted = globalErrors >= 250;
+            aborted = globalHardErrors >= 250;
         }
     }
     KPFuzzReproFinish(&repro);
-    [report appendFormat:@"\n=== Run summary ===\nattempted=%u succeeded=%u failed=%u nack=%u setupFailed=%u statusErrors=%u globalErrors=%u aborted=%s\n",
-     attempted, succeeded, failed, nack, setupFailed, statusErrors, globalErrors,
+    uint32_t skipped = (uint32_t)KPFuzzTotalBudget - attempted;
+    [report appendFormat:@"\n=== Run summary ===\nplanned=%lu attempted=%u skipped=%u succeeded=%u rejected=%u hardErrors=%u setupFailed=%u baselineFailed=%u statusErrors=%u globalHardErrors=%u aborted=%s\n",
+     (unsigned long)KPFuzzTotalBudget, attempted, skipped, succeeded, rejected,
+     hardFailed, setupFailed, baselineFailed, statusErrors, globalHardErrors,
      aborted ? "YES" : "NO"];
     [report appendString:@"Coverage and kr values are signals for triage, not proof of a new bug. Panic analysis requires the persisted BEGIN input and device backtrace.\n"];
     return report;

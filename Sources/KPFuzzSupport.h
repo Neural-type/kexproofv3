@@ -36,6 +36,7 @@ typedef struct {
     uint32_t surfaceID;
     uint32_t sourceID;
     uint32_t destID;
+    uint32_t serviceIndex;
     IOSurfaceRef jpegSource;
     IOSurfaceRef jpegDest;
     NSData *jpegData;
@@ -53,7 +54,8 @@ uint64_t KPFuzzCallHash(const KPFuzzCall *call);
 BOOL KPFuzzReproStart(KPFuzzRepro *repro, uint64_t runSeed, NSError **error);
 void KPFuzzReproFinish(KPFuzzRepro *repro);
 
-kern_return_t KPFuzzSessionStart(const KPFuzzSelectorPlan *plan, KPFuzzSession *session, NSMutableString *report);
+kern_return_t KPFuzzFastPathSelectService(io_service_t *selectedService, uint32_t *selectedIndex, NSMutableString *report);
+kern_return_t KPFuzzSessionStart(const KPFuzzSelectorPlan *plan, io_service_t fastPathService, KPFuzzSession *session, NSMutableString *report);
 void KPFuzzSessionEnd(const KPFuzzSelectorPlan *plan, KPFuzzSession *session);
 void KPFuzzPrepareCall(const KPFuzzSelectorPlan *plan, NSUInteger planIndex, const KPFuzzSession *session, uint32_t iteration, uint64_t runSeed, KPFuzzCall *call);
 kern_return_t KPFuzzInvoke(const KPFuzzSelectorPlan *plan, NSUInteger planIndex, uint32_t iteration, KPFuzzCall *call, const KPFuzzSession *session, KPFuzzRepro *repro, uint64_t runSeed);
