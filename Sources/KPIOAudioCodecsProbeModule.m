@@ -8,6 +8,10 @@
 #include <stdint.h>
 #include <string.h>
 
+typedef struct __SecTask *SecTaskRef;
+extern SecTaskRef SecTaskCreateFromSelf(void);
+extern CFTypeRef SecTaskCopyValueForEntitlement(SecTaskRef task, CFStringRef key);
+
 #ifndef KP_IOAUDIO27_ENABLE_ARMED
 #define KP_IOAUDIO27_ENABLE_ARMED 0
 #endif
@@ -86,6 +90,79 @@ static const char *KPAudioKR(kern_return_t kr) {
 static void KPAudioAppendKR(NSMutableString *report, const char *operation, kern_return_t kr) {
     [report appendFormat:@"    %-34s kr=0x%08x (%s / %d)\n",
      operation, (uint32_t)kr, KPAudioKR(kr), (int32_t)kr];
+}
+
+static NSString *KPAudioCFDescription(CFTypeRef value) {
+    if (!value) {
+        return @"<null>";
+    }
+    CFStringRef description = CFCopyDescription(value);
+    if (!description) {
+        return @"<description-error>";
+    }
+    NSString *result = [NSString stringWithFormat:@"%@", description];
+    CFRelease(description);
+    return result;
+}
+
+static BOOL KPAudioArrayContainsClass(CFTypeRef value) {
+    if (!value || CFGetTypeID(value) != CFArrayGetTypeID()) {
+        return NO;
+    }
+    CFArrayRef array = (CFArrayRef)value;
+    return CFArrayContainsValue(array,
+                                CFRangeMake(0, CFArrayGetCount(array)),
+                                CFSTR("IOAudioCodecsUserClient"));
+}
+
+static void KPAudioLogEffectiveEntitlements(NSMutableString *report) {
+    SecTaskRef task = SecTaskCreateFromSelf();
+    if (!task) {
+        [report appendString:@"    effective entitlements: SecTaskCreateFromSelf failed\n"];
+        return;
+    }
+    CFTypeRef classes = SecTaskCopyValueForEntitlement(task,
+        CFSTR("com.apple.security.exception.iokit-user-client-class"));
+    BOOL contains = KPAudioArrayContainsClass(classes);
+    [report appendFormat:@"    effective IOKit exception: %@; IOAudioCodecsUserClient honoured=%s\n",
+     KPAudioCFDescription(classes), contains ? "YES" : "NO"];
+    if (classes) {
+        CFRelease(classes);
+    }
+    const CFStringRef keys[] = {
+        CFSTR("com.apple.private.security.no-sandbox"),
+        CFSTR("com.apple.private.security.no-container"),
+        CFSTR("platform-application"),
+    };
+    const char *names[] = {"no-sandbox", "no-container", "platform-application"};
+    for (uint32_t index = 0; index < 3; index++) {
+        CFTypeRef value = SecTaskCopyValueForEntitlement(task, keys[index]);
+        [report appendFormat:@"    effective %-20s %@\n", names[index], KPAudioCFDescription(value)];
+        if (value) {
+            CFRelease(value);
+        }
+    }
+    CFRelease(task);
+}
+
+static void KPAudioLogProviderProperties(io_service_t service, NSMutableString *report) {
+    CFMutableDictionaryRef properties = NULL;
+    kern_return_t kr = IORegistryEntryCreateCFProperties(service, &properties, NULL, 0);
+    if (kr != KERN_SUCCESS || !properties) {
+        [report appendFormat:@"    provider properties: kr=0x%08x\n", (uint32_t)kr];
+        return;
+    }
+    const CFStringRef keys[] = {
+        CFSTR("IOUserClientClass"),
+        CFSTR("IOUserClientEntitlements"),
+        CFSTR("Exclusive"),
+    };
+    const char *names[] = {"IOUserClientClass", "IOUserClientEntitlements", "Exclusive"};
+    for (uint32_t index = 0; index < 3; index++) {
+        CFTypeRef value = CFDictionaryGetValue(properties, keys[index]);
+        [report appendFormat:@"    provider %-28s %@\n", names[index], KPAudioCFDescription(value)];
+    }
+    CFRelease(properties);
 }
 
 static void KPAudioEnumerateClass(NSMutableString *report, const char *className) {
@@ -215,10 +292,23 @@ static void KPAudioRunSession(NSMutableString *report, BOOL armed) {
         [report appendString:@"  IOAudioCodecs provider not found; negotiation aborted.\n"];
         return;
     }
-    kern_return_t kr = IOServiceOpen(service, mach_task_self(), 0, &session.connection);
+    KPAudioLogEffectiveEntitlements(report);
+    KPAudioLogProviderProperties(service, report);
+    [report appendString:@"    open types 0/1/2: one-shot each; IOService::newUserClient disasm has no type whitelist\n"];
+    const uint32_t openTypes[] = {0, 1, 2};
+    kern_return_t kr = kIOReturnError;
+    for (uint32_t index = 0; index < sizeof(openTypes) / sizeof(openTypes[0]); index++) {
+        uint32_t type = openTypes[index];
+        kr = IOServiceOpen(service, mach_task_self(), type, &session.connection);
+        [report appendFormat:@"    IOServiceOpen type=%u          kr=0x%08x (%s / %d)\n",
+         type, (uint32_t)kr, KPAudioKR(kr), (int32_t)kr];
+        if (kr == KERN_SUCCESS) {
+            break;
+        }
+    }
     IOObjectRelease(service);
-    KPAudioAppendKR(report, "IOServiceOpen type=0", kr);
     if (kr != KERN_SUCCESS) {
+        [report appendString:@"  OPEN DENIED on all attempted types; selector 5 not reached.\n"];
         return;
     }
 
