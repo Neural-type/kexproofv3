@@ -48,7 +48,7 @@ static kern_return_t KPIOSurfaceOpen(io_connect_t *connection) {
         return KERN_INVALID_ARGUMENT;
     }
     *connection = IO_OBJECT_NULL;
-    io_service_t service = IOServiceGetMatchingService(kIOMasterPortDefault,
+    io_service_t service = IOServiceGetMatchingService(kIOMainPortDefault,
                                                         IOServiceMatching("IOSurfaceRoot"));
     if (!service) {
         return kIOReturnNoDevice;

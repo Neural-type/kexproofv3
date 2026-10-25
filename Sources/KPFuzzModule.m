@@ -103,7 +103,7 @@ static KPFuzzSelectorStats KPFuzzRunSelector(const KPFuzzSelectorPlan *plan,
         .lastKR = KERN_SUCCESS
     };
     KPFuzzSession session;
-    memset(&session, 0, sizeof(session));
+    memset((void *)&session, 0, sizeof(session));
     BOOL perIteration = KPFuzzNeedsSessionPerIteration(plan->kind);
     if (!perIteration) {
         kern_return_t setupKR = KPFuzzSessionStart(plan, &session, report);

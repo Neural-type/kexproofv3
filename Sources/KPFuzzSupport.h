@@ -1,7 +1,7 @@
 #import "KPFuzzPlan.h"
 
 #import <IOKit/IOKitLib.h>
-#import <IOSurface/IOSurface.h>
+#import <IOSurface/IOSurfaceRef.h>
 
 NS_ASSUME_NONNULL_BEGIN
 

@@ -210,7 +210,7 @@ static void KPAudioLogProviderProperties(io_service_t service, NSMutableString *
 
 static void KPAudioEnumerateClass(NSMutableString *report, const char *className) {
     io_iterator_t iterator = IO_OBJECT_NULL;
-    kern_return_t kr = IOServiceGetMatchingServices(kIOMasterPortDefault,
+    kern_return_t kr = IOServiceGetMatchingServices(kIOMainPortDefault,
                                                     IOServiceMatching(className),
                                                     &iterator);
     if (kr != KERN_SUCCESS) {
@@ -329,7 +329,7 @@ static void KPAudioRunSession(NSMutableString *report, BOOL armed) {
     KPAudioSession session;
     memset(&session, 0, sizeof(session));
 
-    io_service_t service = IOServiceGetMatchingService(kIOMasterPortDefault,
+    io_service_t service = IOServiceGetMatchingService(kIOMainPortDefault,
                                                         IOServiceMatching("IOAudioCodecs"));
     if (service == IO_OBJECT_NULL) {
         [report appendString:@"  IOAudioCodecs provider not found; negotiation aborted.\n"];

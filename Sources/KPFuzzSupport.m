@@ -98,7 +98,7 @@ static BOOL KPFuzzWriteAll(int descriptor, NSString *text) {
 
 BOOL KPFuzzReproStart(KPFuzzRepro *repro, uint64_t runSeed, NSError **error) {
     if (!repro) return NO;
-    memset(repro, 0, sizeof(*repro));
+    memset((void *)repro, 0, sizeof(*repro));
     repro->descriptor = -1;
     NSString *documents = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents"];
     if (![[NSFileManager defaultManager] createDirectoryAtPath:documents
@@ -148,7 +148,7 @@ void KPFuzzReproFinish(KPFuzzRepro *repro) {
 }
 
 static kern_return_t KPFuzzOpenSimple(const char *serviceName, uint32_t type) {
-    io_service_t service = IOServiceGetMatchingService(kIOMasterPortDefault,
+    io_service_t service = IOServiceGetMatchingService(kIOMainPortDefault,
                                                         IOServiceMatching(serviceName));
     if (service == IO_OBJECT_NULL) return kIOReturnNoDevice;
     io_connect_t connection = IO_OBJECT_NULL;
@@ -160,9 +160,9 @@ static kern_return_t KPFuzzOpenSimple(const char *serviceName, uint32_t type) {
 static kern_return_t KPFuzzOpenFastPath(io_connect_t *connection) {
     *connection = IO_OBJECT_NULL;
     CFMutableDictionaryRef matching = IOServiceMatching("IOHIDEventService");
-    if (!matching) return kIOReturnInvalidArgument;
+    if (!matching) return kIOReturnBadArgument;
     io_iterator_t iterator = IO_OBJECT_NULL;
-    kern_return_t kr = IOServiceGetMatchingServices(kIOMasterPortDefault, matching, &iterator);
+    kern_return_t kr = IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator);
     if (kr != KERN_SUCCESS) return kr;
     kern_return_t lastError = kIOReturnNoDevice;
     io_service_t service = IO_OBJECT_NULL;
@@ -382,7 +382,7 @@ static kern_return_t KPFuzzFastPathOpenGate(io_connect_t connection) {
 }
 
 kern_return_t KPFuzzSessionStart(const KPFuzzSelectorPlan *plan, KPFuzzSession *session, NSMutableString *report) {
-    memset(session, 0, sizeof(*session));
+    memset((void *)session, 0, sizeof(*session));
     kern_return_t kr = KPFuzzOpenFamily(plan->family, &session->connection);
     if (kr != KERN_SUCCESS || session->connection == IO_OBJECT_NULL) {
         [report appendFormat:@"  setup: open %s type=%u failed kr=0x%08x\n",
@@ -422,6 +422,7 @@ kern_return_t KPFuzzSessionStart(const KPFuzzSelectorPlan *plan, KPFuzzSession *
                 kr = KPFuzzCreateSurface(session->surfaceConnection, 32, 32, &session->destID);
             }
             break;
+        }
         case KPFuzzSelectorIOMFBScalar:
         case KPFuzzSelectorFastPathOpen:
             return KERN_SUCCESS;
@@ -636,11 +637,11 @@ static void KPFuzzApplyFieldPolicies(const KPFuzzSelectorPlan *plan,
             call->scalarInput[3] = call->structInputCount;
             break;
         case KPFuzzSelectorIOSurfaceCreate:
-            KPFuzzPut32(call->structInput, 8, (uint32_t)KPFuzzSafeValue(state, dimensions, sizeof(dimensions) / sizeof(dimensions[0]));
-            KPFuzzPut32(call->structInput, 12, (uint32_t)KPFuzzSafeValue(state, dimensions, sizeof(dimensions) / sizeof(dimensions[0]));
-            KPFuzzPut32(call->structInput, 20, (uint32_t)KPFuzzSafeValue(state, elementSizes, sizeof(elementSizes) / sizeof(elementSizes[0]));
-            KPFuzzPut32(call->structInput, 24, (uint32_t)KPFuzzSafeValue(state, allocationSizes, sizeof(allocationSizes) / sizeof(allocationSizes[0]));
-            KPFuzzPut32(call->structInput, 28, (uint32_t)KPFuzzSafeValue(state, allocationSizes, sizeof(allocationSizes) / sizeof(allocationSizes[0]));
+            KPFuzzPut32(call->structInput, 8, (uint32_t)KPFuzzSafeValue(state, dimensions, sizeof(dimensions) / sizeof(dimensions[0])));
+            KPFuzzPut32(call->structInput, 12, (uint32_t)KPFuzzSafeValue(state, dimensions, sizeof(dimensions) / sizeof(dimensions[0])));
+            KPFuzzPut32(call->structInput, 20, (uint32_t)KPFuzzSafeValue(state, elementSizes, sizeof(elementSizes) / sizeof(elementSizes[0])));
+            KPFuzzPut32(call->structInput, 24, (uint32_t)KPFuzzSafeValue(state, allocationSizes, sizeof(allocationSizes) / sizeof(allocationSizes[0])));
+            KPFuzzPut32(call->structInput, 28, (uint32_t)KPFuzzSafeValue(state, allocationSizes, sizeof(allocationSizes) / sizeof(allocationSizes[0])));
             break;
         case KPFuzzSelectorIOSurfaceIncrement:
         case KPFuzzSelectorIOSurfaceDecrement:
@@ -662,13 +663,13 @@ static void KPFuzzApplyFieldPolicies(const KPFuzzSelectorPlan *plan,
             uint32_t sourceSize = plan->kind == KPFuzzSelectorJPEGDecode ? session->jpegByteCount : 64 * 64 * 4;
             uint32_t destSize = plan->kind == KPFuzzSelectorJPEGDecode ? 64 * 64 * 4 : (uint32_t)IOSurfaceGetAllocSize(session->jpegSource);
             uint64_t sizes[] = {7, 8, 16, 32, 64, 128, sourceSize, destSize};
-            KPFuzzPut32(call->structInput, 4, (uint32_t)KPFuzzSafeValue(state, sizes, sizeof(sizes) / sizeof(sizes[0]));
-            KPFuzzPut32(call->structInput, 12, (uint32_t)KPFuzzSafeValue(state, sizes, sizeof(sizes) / sizeof(sizes[0]));
-            KPFuzzPut32(call->structInput, 20, (uint32_t)KPFuzzSafeValue(state, dimensions, sizeof(dimensions) / sizeof(dimensions[0]));
-            KPFuzzPut32(call->structInput, 24, (uint32_t)KPFuzzSafeValue(state, dimensions, sizeof(dimensions) / sizeof(dimensions[0]));
-            KPFuzzPut32(call->structInput, 44, (uint32_t)KPFuzzSafeValue(state, subsampling, sizeof(subsampling) / sizeof(subsampling[0]));
-            KPFuzzPut32(call->structInput, 76, (uint32_t)KPFuzzSafeValue(state, dimensions, sizeof(dimensions) / sizeof(dimensions[0]));
-            KPFuzzPut32(call->structInput, 80, (uint32_t)KPFuzzSafeValue(state, dimensions, sizeof(dimensions) / sizeof(dimensions[0]));
+            KPFuzzPut32(call->structInput, 4, (uint32_t)KPFuzzSafeValue(state, sizes, sizeof(sizes) / sizeof(sizes[0])));
+            KPFuzzPut32(call->structInput, 12, (uint32_t)KPFuzzSafeValue(state, sizes, sizeof(sizes) / sizeof(sizes[0])));
+            KPFuzzPut32(call->structInput, 20, (uint32_t)KPFuzzSafeValue(state, dimensions, sizeof(dimensions) / sizeof(dimensions[0])));
+            KPFuzzPut32(call->structInput, 24, (uint32_t)KPFuzzSafeValue(state, dimensions, sizeof(dimensions) / sizeof(dimensions[0])));
+            KPFuzzPut32(call->structInput, 44, (uint32_t)KPFuzzSafeValue(state, subsampling, sizeof(subsampling) / sizeof(subsampling[0])));
+            KPFuzzPut32(call->structInput, 76, (uint32_t)KPFuzzSafeValue(state, dimensions, sizeof(dimensions) / sizeof(dimensions[0])));
+            KPFuzzPut32(call->structInput, 80, (uint32_t)KPFuzzSafeValue(state, dimensions, sizeof(dimensions) / sizeof(dimensions[0])));
             call->structInput[32] &= 7;
             break;
         }
