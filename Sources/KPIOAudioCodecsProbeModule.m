@@ -7,10 +7,9 @@
 
 #include <stdint.h>
 #include <string.h>
-
-typedef struct __SecTask *SecTaskRef;
-extern SecTaskRef SecTaskCreateFromSelf(void);
-extern CFTypeRef SecTaskCopyValueForEntitlement(SecTaskRef task, CFStringRef key);
+#include <stdio.h>
+#include <stdlib.h>
+#include <mach-o/loader.h>
 
 #ifndef KP_IOAUDIO27_ENABLE_ARMED
 #define KP_IOAUDIO27_ENABLE_ARMED 0
@@ -115,34 +114,77 @@ static BOOL KPAudioArrayContainsClass(CFTypeRef value) {
                                 CFSTR("IOAudioCodecsUserClient"));
 }
 
+static uint32_t KPAudioBE32(const uint8_t *p) {
+    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3];
+}
+
 static void KPAudioLogEffectiveEntitlements(NSMutableString *report) {
-    SecTaskRef task = SecTaskCreateFromSelf();
-    if (!task) {
-        [report appendString:@"    effective entitlements: SecTaskCreateFromSelf failed\n"];
+    [report appendString:@"    entitlements source: embedded code signature (SecTask API removed: codesigning crash on this device)\n"];
+    char path[1024];
+    uint32_t pathSize = sizeof(path);
+    if (_NSGetExecutablePath(path, &pathSize) != 0) {
+        [report appendString:@"    embedded entitlements: _NSGetExecutablePath failed\n"];
         return;
     }
-    CFTypeRef classes = SecTaskCopyValueForEntitlement(task,
-        CFSTR("com.apple.security.exception.iokit-user-client-class"));
-    BOOL contains = KPAudioArrayContainsClass(classes);
-    [report appendFormat:@"    effective IOKit exception: %@; IOAudioCodecsUserClient honoured=%s\n",
-     KPAudioCFDescription(classes), contains ? "YES" : "NO"];
-    if (classes) {
-        CFRelease(classes);
+    FILE *file = fopen(path, "rb");
+    if (!file) {
+        [report appendString:@"    embedded entitlements: fopen failed\n"];
+        return;
     }
-    const CFStringRef keys[] = {
-        CFSTR("com.apple.private.security.no-sandbox"),
-        CFSTR("com.apple.private.security.no-container"),
-        CFSTR("platform-application"),
-    };
-    const char *names[] = {"no-sandbox", "no-container", "platform-application"};
-    for (uint32_t index = 0; index < 3; index++) {
-        CFTypeRef value = SecTaskCopyValueForEntitlement(task, keys[index]);
-        [report appendFormat:@"    effective %-20s %@\n", names[index], KPAudioCFDescription(value)];
-        if (value) {
-            CFRelease(value);
+    struct mach_header_64 header;
+    if (fread(&header, sizeof(header), 1, file) != 1 || header.magic != MH_MAGIC_64) {
+        [report appendString:@"    embedded entitlements: bad mach-o\n"];
+        fclose(file);
+        return;
+    }
+    uint32_t dataoff = 0, datasize = 0;
+    for (uint32_t index = 0; index < header.ncmds; index++) {
+        struct load_command command;
+        if (fread(&command, sizeof(command), 1, file) != 1) break;
+        if (command.cmd == LC_CODE_SIGNATURE) {
+            struct linkedit_data_command cs;
+            if (fseek(file, -((long)sizeof(command)), SEEK_CUR) == 0 &&
+                fread(&cs, sizeof(cs), 1, file) == 1) {
+                dataoff = cs.dataoff;
+                datasize = cs.datasize;
+            }
+            break;
         }
+        if (command.cmdsize < sizeof(command) ||
+            fseek(file, (long)command.cmdsize - (long)sizeof(command), SEEK_CUR) != 0) break;
     }
-    CFRelease(task);
+    if (!dataoff || !datasize || datasize > (16u << 20) ||
+        fseek(file, (long)dataoff, SEEK_SET) != 0) {
+        [report appendString:@"    embedded entitlements: no LC_CODE_SIGNATURE\n"];
+        fclose(file);
+        return;
+    }
+    uint8_t *blob = malloc(datasize);
+    if (!blob || fread(blob, datasize, 1, file) != 1) {
+        free(blob);
+        fclose(file);
+        [report appendString:@"    embedded entitlements: signature read failed\n"];
+        return;
+    }
+    fclose(file);
+    BOOL found = NO;
+    for (uint32_t offset = 0; offset + 12 < datasize; offset++) {
+        if (KPAudioBE32(blob + offset) != 0xfade7171) continue;
+        uint32_t length = KPAudioBE32(blob + offset + 4);
+        if (length < 12 || offset + length > datasize) continue;
+        NSString *xml = [[NSString alloc] initWithBytes:blob + offset + 8
+                                                 length:length - 8
+                                               encoding:NSUTF8StringEncoding];
+        [report appendFormat:@"    embedded entitlements XML:\n%@\n", xml ?: @"<non-utf8>"];
+        [report appendFormat:@"    embedded exception contains IOAudioCodecsUserClient: %s (requested, honoured unknown without SecTask)\n",
+         xml && [xml containsString:@"IOAudioCodecsUserClient"] ? "YES" : "NO"];
+        found = YES;
+        break;
+    }
+    if (!found) {
+        [report appendString:@"    embedded entitlements: no 0xfade7171 blob (unsigned/adhoc without entitlements?)\n"];
+    }
+    free(blob);
 }
 
 static void KPAudioLogProviderProperties(io_service_t service, NSMutableString *report) {
