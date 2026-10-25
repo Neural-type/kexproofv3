@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <mach-o/loader.h>
+#include <mach-o/dyld.h>
 
 #ifndef KP_IOAUDIO27_ENABLE_ARMED
 #define KP_IOAUDIO27_ENABLE_ARMED 0
