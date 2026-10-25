@@ -124,7 +124,7 @@ static kern_return_t KPAGXOpen(io_connect_t *connection, NSMutableString *report
     for (uint32_t nameIndex = 0; nameIndex < sizeof(names) / sizeof(names[0]); nameIndex++) {
         for (uint32_t typeIndex = 0; typeIndex < 2; typeIndex++) {
             uint32_t type = (firstType[nameIndex] + typeIndex) & 1;
-            io_service_t service = IOServiceGetMatchingService(kIOMainPortDefault,
+            io_service_t service = IOServiceGetMatchingService(kIOMasterPortDefault,
                                                                 IOServiceMatching(names[nameIndex]));
             if (service == IO_OBJECT_NULL) {
                 [report appendFormat:@"    %-40s service not found\n", names[nameIndex]];
