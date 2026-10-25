@@ -415,13 +415,16 @@ static BOOL KPM2ScalerRunRace(NSMutableString *report,
         io_connect_t r2 = IO_OBJECT_NULL;
         kern_return_t openKR = KPM2ScalerOpen(service, &r2);
         KPM2ScalerRecordKR(report, "ARMED R2 open type=0", openKR);
-        if (openKR == KERN_SUCCESS && KPM2ScalerCheckClass(r2, report)) {
+        if (openKR == KERN_SUCCESS) {
+            if (!KPM2ScalerCheckClass(r2, report)) {
+                [report appendString:@"  R2 class query unsupported; continuing because open succeeded.\n"];
+            }
             [KPLog.shared append:@"M2Scaler ARMED R2 before single async selector 1"];
             kern_return_t submitKR = KPM2ScalerSubmit(r2, baseline, 1);
             KPM2ScalerRecordKR(report, "ARMED R2 single async submit", submitKR);
             usleep(50000);
         } else {
-            [report appendString:@"  R2 submit withheld: open/class validation failed.\n"];
+            [report appendString:@"  R2 submit withheld: open failed.\n"];
         }
         if (r2 != IO_OBJECT_NULL) {
             kern_return_t r2CloseKR = IOServiceClose(r2);
