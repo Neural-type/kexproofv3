@@ -2,6 +2,7 @@
 #import "KPDeviceInfoModule.h"
 #import "KPIOSurfaceProbeModule.h"
 #import "KPIOAudioCodecsProbeModule.h"
+#import "KPM2ScalerProbeModule.h"
 #import "KPLog.h"
 #import "KPLogViewController.h"
 #import "KPReportStore.h"
@@ -73,11 +74,8 @@
                                             subtitle:@"DER entitlement parsing and validation behavior"
                                                 icon:@"checkmark.shield"
                                              details:@"AMFI DER entitlement input generation and trust-validation hooks."],
-        [[KPStubTestModule alloc] initWithIdentifier:@"m2scaler.piodma"
-                                               title:@"M2Scaler PIODMA Probe"
-                                            subtitle:@"M2Scaler programmed-I/O DMA research"
-                                                icon:@"cable.connector"
-                                             details:@"M2Scaler PIODMA setup, transfer and completion-validation hooks."]
+        [[KPM2ScalerProbeModule alloc] init],
+        [[KPM2ScalerProbeModule alloc] initWithArmed:YES]
     ];
     NSMutableArray<NSMutableArray<id<KPTestModule>> *> *groups = [NSMutableArray arrayWithCapacity:self.sectionTitles.count];
     for (NSUInteger index = 0; index < self.sectionTitles.count; index++) {
@@ -107,7 +105,7 @@
     self.statusView = [[KPStatusView alloc] init];
     [self.statusView updateWithState:KPStatusStateIdle
                                title:@"Ready"
-                              detail:@"2 system checks · IOSurface + IOAudioCodecs reachability · 4 stub modules"];
+                              detail:@"2 system checks · IOSurface + IOAudioCodecs + M2Scaler · 3 stub modules"];
 
     self.runButton = [UIButton buttonWithType:UIButtonTypeSystem];
     self.runButton.translatesAutoresizingMaskIntoConstraints = NO;
@@ -195,6 +193,7 @@
     for (id<KPTestModule> module in self.modules) {
         if ([module.identifier isEqualToString:@"iosurface.race"]) continue;
         if ([module.identifier isEqualToString:@"ioaudio27.panic"]) continue;
+        if ([module.identifier isEqualToString:@"m2scaler27.race"]) continue;
         [safeModules addObject:module];
     }
     [self startModules:safeModules];
