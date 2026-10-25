@@ -1,5 +1,6 @@
 #import "KPViewController.h"
 #import "KPDeviceInfoModule.h"
+#import "KPAGXSpillProbeModule.h"
 #import "KPIOSurfaceProbeModule.h"
 #import "KPIOAudioCodecsProbeModule.h"
 #import "KPM2ScalerProbeModule.h"
@@ -64,11 +65,8 @@
         [[KPIOSurfaceProbeModule alloc] initWithArmed:YES],
         [[KPIOAudioCodecsProbeModule alloc] init],
         [[KPIOAudioCodecsProbeModule alloc] initWithArmed:YES],
-        [[KPStubTestModule alloc] initWithIdentifier:@"iogpu.perform-mappings"
-                                               title:@"IOGPU performMappings Probe"
-                                            subtitle:@"GPU mapping selector and argument validation"
-                                                icon:@"cpu"
-                                             details:@"IOGPU performMappings invocation, validation and result inspection hooks."],
+        [[KPAGXSpillProbeModule alloc] init],
+        [[KPAGXSpillProbeModule alloc] initWithArmed:YES],
         [[KPStubTestModule alloc] initWithIdentifier:@"amfi.der-entitlements"
                                                title:@"AMFI DER Entitlement Probe"
                                             subtitle:@"DER entitlement parsing and validation behavior"
@@ -105,7 +103,7 @@
     self.statusView = [[KPStatusView alloc] init];
     [self.statusView updateWithState:KPStatusStateIdle
                                title:@"Ready"
-                              detail:@"2 system checks · IOSurface + IOAudioCodecs + M2Scaler · 3 stub modules"];
+                              detail:@"2 system checks · IOSurface + IOAudioCodecs + M2Scaler + AGX spill · 2 stub modules"];
 
     self.runButton = [UIButton buttonWithType:UIButtonTypeSystem];
     self.runButton.translatesAutoresizingMaskIntoConstraints = NO;
@@ -194,6 +192,7 @@
         if ([module.identifier isEqualToString:@"iosurface.race"]) continue;
         if ([module.identifier isEqualToString:@"ioaudio27.panic"]) continue;
         if ([module.identifier isEqualToString:@"m2scaler27.race"]) continue;
+        if ([module.identifier isEqualToString:@"agx27.spill.armed"]) continue;
         [safeModules addObject:module];
     }
     [self startModules:safeModules];
