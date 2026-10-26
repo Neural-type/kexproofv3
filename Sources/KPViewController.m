@@ -49,7 +49,7 @@
     [self configureTable];
     [self updateRunButton];
 
-    NSString *version = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.3.0";
+    NSString *version = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.3.1";
     [KPLog.shared appendFormat:@"=== KexProofV3 %@ started @ %@ ===", version, [NSDate date]];
     [KPLog.shared append:@"Clean iOS 27 research workbench. No exploit engine or legacy binary resources bundled."];
 }
@@ -95,7 +95,7 @@
     self.headerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 390, 260)];
 
     UILabel *versionLabel = [[UILabel alloc] init];
-    NSString *version = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.3.0";
+    NSString *version = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.3.1";
     versionLabel.text = [NSString stringWithFormat:@"KexProofV3 · %@", version];
     versionLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
     versionLabel.textColor = UIColor.labelColor;

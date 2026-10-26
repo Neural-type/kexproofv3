@@ -4,6 +4,7 @@
 
 #import <CommonCrypto/CommonDigest.h>
 #import <CoreGraphics/CoreGraphics.h>
+#import <ImageIO/ImageIO.h>
 #import <errno.h>
 #import <fcntl.h>
 #import <signal.h>
@@ -21,6 +22,13 @@
 #define KP_GLYPH_RENDER_SIZE 256
 #define KP_GLYPH_SIGNAL_COUNT 6
 
+typedef NS_ENUM(NSInteger, KPGlyphRoute) {
+    KPGlyphRouteCGPDFScaled = 0,
+    KPGlyphRouteCGPDFNatural,
+    KPGlyphRouteImageIO,
+    KPGlyphRouteCGFont
+};
+
 typedef struct {
     const char *identifier;
     const char *resource;
@@ -30,6 +38,7 @@ typedef struct {
     int32_t triggerX;
     int32_t dx;
     int32_t depth;
+    KPGlyphRoute route;
 } KPGlyphVariant;
 
 static const KPGlyphVariant KPGlyphBenign = {
@@ -40,83 +49,150 @@ static const KPGlyphVariant KPGlyphBenign = {
     .note = "non-extreme render control",
     .triggerX = 0,
     .dx = 0,
-    .depth = 0
+    .depth = 0,
+    .route = KPGlyphRouteCGPDFScaled
 };
 
 static const KPGlyphVariant KPGlyphArmedVariants[] = {
     {
-        .identifier = "g3",
+        .identifier = "g3-cgfont",
         .resource = "glyph-g3",
         .operation = "aa_lineto/edgepool",
         .arena = "heap",
-        .note = "minimal line trigger; static 27.0.1 match",
+        .note = "direct CGFont harness; identity CTM; font size=1024",
         .triggerX = 32000,
         .dx = 33,
-        .depth = 9
+        .depth = 9,
+        .route = KPGlyphRouteCGFont
     },
     {
-        .identifier = "calif-trigger",
-        .resource = "glyph-calif-trigger",
+        .identifier = "g3-imageio",
+        .resource = "glyph-g3",
         .operation = "aa_lineto/edgepool",
         .arena = "heap",
-        .note = "Calif source PDF; same outline as g3",
+        .note = "original ImageIO thumbnail route; no forced page upscale",
         .triggerX = 32000,
         .dx = 33,
-        .depth = 9
+        .depth = 9,
+        .route = KPGlyphRouteImageIO
     },
     {
-        .identifier = "trigger",
-        .resource = "glyph-trigger",
+        .identifier = "g3-cgpdf-natural",
+        .resource = "glyph-g3",
         .operation = "aa_lineto/edgepool",
         .arena = "heap",
-        .note = "regenerated trigger PDF; same outline as g3",
+        .note = "natural 200x200 page; removes the old probe 1.28 scale",
         .triggerX = 32000,
         .dx = 33,
-        .depth = 9
+        .depth = 9,
+        .route = KPGlyphRouteCGPDFNatural
     },
     {
-        .identifier = "w1a",
+        .identifier = "tm075-cgpdf-scaled",
+        .resource = "glyph-tm075",
+        .operation = "aa_lineto/edgepool",
+        .arena = "heap",
+        .note = "tm_a=0.75; at 1.28 gate=983.04 and low32 is negative",
+        .triggerX = 32000,
+        .dx = 33,
+        .depth = 9,
+        .route = KPGlyphRouteCGPDFScaled
+    },
+    {
+        .identifier = "tm075-imageio",
+        .resource = "glyph-tm075",
+        .operation = "aa_lineto/edgepool",
+        .arena = "heap",
+        .note = "tm_a=0.75 calibration through original ImageIO route",
+        .triggerX = 32000,
+        .dx = 33,
+        .depth = 9,
+        .route = KPGlyphRouteImageIO
+    },
+    {
+        .identifier = "w1a-imageio",
         .resource = "glyph-w1a",
         .operation = "aa_lineto/edgepool",
         .arena = "heap",
         .note = "yscale=1; tm_a=0.99999868; 18.6 SPRAY_HIT=1 only",
         .triggerX = 32842,
         .dx = 32,
-        .depth = 9
+        .depth = 9,
+        .route = KPGlyphRouteImageIO
     },
     {
-        .identifier = "w4b",
+        .identifier = "w4b-imageio",
         .resource = "glyph-w4b",
         .operation = "aa_lineto/edgepool",
         .arena = "heap",
         .note = "yscale=1; tm_a=1.0; 18.6 SPRAY_HIT=1 only",
         .triggerX = 16454,
         .dx = 32,
-        .depth = 10
+        .depth = 10,
+        .route = KPGlyphRouteImageIO
     },
     {
-        .identifier = "g1-stack",
+        .identifier = "g1-stack-imageio",
         .resource = "glyph-g1",
         .operation = "aa_lineto/edgepool",
         .arena = "stack/alloca",
         .note = "DX below heap threshold; exploratory arena check",
         .triggerX = 32000,
         .dx = 31,
-        .depth = 9
+        .depth = 9,
+        .route = KPGlyphRouteImageIO
+    },
+    {
+        .identifier = "g3-scaled-control",
+        .resource = "glyph-g3",
+        .operation = "aa_lineto/edgepool",
+        .arena = "heap",
+        .note = "old 200->256 route; expected gate failure and positive low32",
+        .triggerX = 32000,
+        .dx = 33,
+        .depth = 9,
+        .route = KPGlyphRouteCGPDFScaled
+    }
+};
+
+static const KPGlyphVariant KPGlyphPassiveVariants[] = {
+    {
+        .identifier = "calif-trigger",
+        .resource = "glyph-calif-trigger",
+        .operation = "aa_lineto/edgepool",
+        .arena = "heap",
+        .note = "Calif source PDF; same outline as g3; structure-only in v2",
+        .triggerX = 32000,
+        .dx = 33,
+        .depth = 9,
+        .route = KPGlyphRouteCGPDFScaled
+    },
+    {
+        .identifier = "trigger",
+        .resource = "glyph-trigger",
+        .operation = "aa_lineto/edgepool",
+        .arena = "heap",
+        .note = "regenerated trigger PDF; same outline as g3; structure-only in v2",
+        .triggerX = 32000,
+        .dx = 33,
+        .depth = 9,
+        .route = KPGlyphRouteCGPDFScaled
     },
     {
         .identifier = "curve",
         .resource = "glyph-curve",
         .operation = "aa_quadto/edgepool",
         .arena = "heap",
-        .note = "off-curve exploratory case; not the minimal g3 path",
+        .note = "off-curve resource retained for structure checks, not v2 execution",
         .triggerX = 32000,
         .dx = 33,
-        .depth = 9
+        .depth = 9,
+        .route = KPGlyphRouteCGPDFScaled
     }
 };
 
 static const size_t KPGlyphArmedVariantCount = sizeof(KPGlyphArmedVariants) / sizeof(KPGlyphArmedVariants[0]);
+static const size_t KPGlyphPassiveVariantCount = sizeof(KPGlyphPassiveVariants) / sizeof(KPGlyphPassiveVariants[0]);
 static const int KPGlyphSignals[KP_GLYPH_SIGNAL_COUNT] = {SIGSEGV, SIGBUS, SIGABRT, SIGILL, SIGFPE, SIGTRAP};
 static volatile sig_atomic_t gGlyphActive;
 static volatile sig_atomic_t gGlyphIndex;
@@ -141,7 +217,7 @@ static size_t gGlyphIdentifierLength;
         _identifier = armed ? @"glyph27.render.armed" : @"glyph27.render.safe";
         _title = armed ? @"Glyph Grift ARMED" : @"Glyph Grift PDF Probe";
         _subtitle = armed
-            ? @"Explicit tap · 7 bounded variants · crash may terminate app"
+            ? @"Explicit tap · bounded route matrix · crash may terminate app"
             : @"Parse bundled PDFs · render standard benign only";
         _icon = armed ? @"exclamationmark.triangle" : @"doc.text.magnifyingglass";
         _section = KPTestSectionKernelProbes;
@@ -315,6 +391,7 @@ static NSDictionary *KPGlyphInspectPDF(NSURL *URL, NSError **error) {
     NSDictionary *font = KPGlyphInspectTTF(ttf, error);
     if (!font) return nil;
     [result addEntriesFromDictionary:font];
+    result[@"ttf"] = ttf;
     result[@"embeddedFont"] = @YES;
     return result;
 }
@@ -352,8 +429,9 @@ static BOOL KPGlyphAppendInspection(NSMutableString *report, const KPGlyphVarian
     return matches;
 }
 
-static NSDictionary *KPGlyphRenderPDF(NSURL *URL) {
+static NSDictionary *KPGlyphRenderPDF(NSURL *URL, BOOL scaleToFit) {
     NSMutableDictionary *result = [NSMutableDictionary dictionary];
+    result[@"route"] = scaleToFit ? @"CGPDF-scaled" : @"CGPDF-natural";
     CGPDFDocumentRef document = NULL;
     CGColorSpaceRef colorSpace = NULL;
     CGContextRef context = NULL;
@@ -376,23 +454,27 @@ static NSDictionary *KPGlyphRenderPDF(NSURL *URL) {
             result[@"status"] = @"PDF_MEDIABOX_FAILED";
             return result;
         }
+        size_t width = scaleToFit ? KP_GLYPH_RENDER_SIZE : (size_t)(box.size.width + 0.5);
+        size_t height = scaleToFit ? KP_GLYPH_RENDER_SIZE : (size_t)(box.size.height + 0.5);
+        result[@"pageScale"] = scaleToFit ? @(KP_GLYPH_RENDER_SIZE / box.size.width) : @1.0;
         colorSpace = CGColorSpaceCreateDeviceRGB();
         if (!colorSpace) {
             result[@"status"] = @"COLORSPACE_FAILED";
             return result;
         }
-        context = CGBitmapContextCreate(NULL, KP_GLYPH_RENDER_SIZE, KP_GLYPH_RENDER_SIZE,
-                                        8, KP_GLYPH_RENDER_SIZE * 4, colorSpace,
+        context = CGBitmapContextCreate(NULL, width, height, 8, width * 4, colorSpace,
                                         kCGImageAlphaPremultipliedLast);
         if (!context) {
             result[@"status"] = @"CONTEXT_CREATE_FAILED";
             return result;
         }
         CGContextSetRGBFillColor(context, 1, 1, 1, 1);
-        CGContextFillRect(context, CGRectMake(0, 0, KP_GLYPH_RENDER_SIZE, KP_GLYPH_RENDER_SIZE));
+        CGContextFillRect(context, CGRectMake(0, 0, width, height));
         CGContextSetShouldSmoothFonts(context, false);
-        CGContextScaleCTM(context, KP_GLYPH_RENDER_SIZE / box.size.width,
-                          KP_GLYPH_RENDER_SIZE / box.size.height);
+        if (scaleToFit) {
+            CGContextScaleCTM(context, KP_GLYPH_RENDER_SIZE / box.size.width,
+                              KP_GLYPH_RENDER_SIZE / box.size.height);
+        }
         CGContextTranslateCTM(context, -box.origin.x, -box.origin.y);
         CGContextDrawPDFPage(context, page);
         CGContextFlush(context);
@@ -414,6 +496,134 @@ static NSDictionary *KPGlyphRenderPDF(NSURL *URL) {
         if (colorSpace) CGColorSpaceRelease(colorSpace);
         if (document) CGPDFDocumentRelease(document);
     }
+}
+
+static NSDictionary *KPGlyphRenderImageIO(NSURL *URL) {
+    NSMutableDictionary *result = [NSMutableDictionary dictionary];
+    result[@"route"] = @"ImageIO-thumbnail";
+    CGImageSourceRef source = NULL;
+    CFNumberRef maximumSize = NULL;
+    CFDictionaryRef options = NULL;
+    CGImageRef image = NULL;
+    @try {
+        source = CGImageSourceCreateWithURL((__bridge CFURLRef)URL, NULL);
+        if (!source) {
+            result[@"status"] = @"IMAGE_SOURCE_FAILED";
+            return result;
+        }
+        int size = KP_GLYPH_RENDER_SIZE;
+        maximumSize = CFNumberCreate(NULL, kCFNumberIntType, &size);
+        const void *keys[] = {kCGImageSourceCreateThumbnailFromImageAlways, kCGImageSourceThumbnailMaxPixelSize};
+        const void *values[] = {kCFBooleanTrue, maximumSize};
+        options = CFDictionaryCreate(NULL, keys, values, 2,
+                                     &kCFTypeDictionaryKeyCallBacks,
+                                     &kCFTypeDictionaryValueCallBacks);
+        if (!options) {
+            result[@"status"] = @"THUMBNAIL_OPTIONS_FAILED";
+            return result;
+        }
+        image = CGImageSourceCreateThumbnailAtIndex(source, 0, options);
+        if (!image) {
+            result[@"status"] = @"THUMBNAIL_RETURNED_NULL";
+            return result;
+        }
+        result[@"status"] = @"RENDERED_SURVIVED";
+        result[@"pages"] = @1;
+        result[@"image"] = [NSString stringWithFormat:@"%zux%zu", CGImageGetWidth(image), CGImageGetHeight(image)];
+        return result;
+    } @catch (NSException *exception) {
+        result[@"status"] = @"EXCEPTION";
+        result[@"detail"] = exception.reason ?: exception.name;
+        return result;
+    } @finally {
+        if (image) CGImageRelease(image);
+        if (options) CFRelease(options);
+        if (maximumSize) CFRelease(maximumSize);
+        if (source) CFRelease(source);
+    }
+}
+
+static NSDictionary *KPGlyphRenderCGFont(NSData *ttf) {
+    NSMutableDictionary *result = [NSMutableDictionary dictionary];
+    result[@"route"] = @"CGFont-direct";
+    CGDataProviderRef provider = NULL;
+    CGFontRef font = NULL;
+    CGColorSpaceRef colorSpace = NULL;
+    CGContextRef context = NULL;
+    CGImageRef image = NULL;
+    @try {
+        if (!ttf.length) {
+            result[@"status"] = @"TTF_EMPTY";
+            return result;
+        }
+        provider = CGDataProviderCreateWithCFData((__bridge CFDataRef)ttf);
+        if (!provider) {
+            result[@"status"] = @"FONT_PROVIDER_FAILED";
+            return result;
+        }
+        font = CGFontCreateWithDataProvider(provider);
+        if (!font) {
+            result[@"status"] = @"FONT_CREATE_FAILED";
+            return result;
+        }
+        CGGlyph glyph = CGFontGetGlyphWithGlyphName(font, CFSTR("A"));
+        if (!glyph) {
+            result[@"status"] = @"GLYPH_LOOKUP_FAILED";
+            return result;
+        }
+        colorSpace = CGColorSpaceCreateDeviceGray();
+        if (!colorSpace) {
+            result[@"status"] = @"COLORSPACE_FAILED";
+            return result;
+        }
+        context = CGBitmapContextCreate(NULL, 64, 64, 8, 64, colorSpace,
+                                        kCGImageAlphaNone);
+        if (!context) {
+            result[@"status"] = @"CONTEXT_CREATE_FAILED";
+            return result;
+        }
+        CGContextSetRGBFillColor(context, 1, 1, 1, 1);
+        CGContextFillRect(context, CGRectMake(0, 0, 64, 64));
+        CGContextSetShouldSmoothFonts(context, false);
+        CGContextSetFont(context, font);
+        CGContextSetFontSize(context, 1024);
+        CGPoint position = CGPointZero;
+        CGContextShowGlyphsAtPositions(context, &glyph, &position, 1);
+        CGContextFlush(context);
+        image = CGBitmapContextCreateImage(context);
+        if (!image) {
+            result[@"status"] = @"DRAW_RETURNED_NO_IMAGE";
+            return result;
+        }
+        result[@"status"] = @"RENDERED_SURVIVED";
+        result[@"pages"] = @1;
+        result[@"image"] = [NSString stringWithFormat:@"%zux%zu", CGImageGetWidth(image), CGImageGetHeight(image)];
+        return result;
+    } @catch (NSException *exception) {
+        result[@"status"] = @"EXCEPTION";
+        result[@"detail"] = exception.reason ?: exception.name;
+        return result;
+    } @finally {
+        if (image) CGImageRelease(image);
+        if (context) CGContextRelease(context);
+        if (colorSpace) CGColorSpaceRelease(colorSpace);
+        if (font) CGFontRelease(font);
+        if (provider) CGDataProviderRelease(provider);
+    }
+}
+
+static NSDictionary *KPGlyphRenderVariant(const KPGlyphVariant *variant, NSURL *URL, NSDictionary *info) {
+    switch (variant->route) {
+        case KPGlyphRouteCGPDFScaled:
+            return KPGlyphRenderPDF(URL, YES);
+        case KPGlyphRouteCGPDFNatural:
+            return KPGlyphRenderPDF(URL, NO);
+        case KPGlyphRouteImageIO:
+            return KPGlyphRenderImageIO(URL);
+        case KPGlyphRouteCGFont:
+            return KPGlyphRenderCGFont(info[@"ttf"]);
+    }
+    return @{@"status": @"ROUTE_UNKNOWN"};
 }
 
 static NSString *KPGlyphCheckCanary(uint8_t *canary) {
@@ -474,7 +684,7 @@ static NSString *KPGlyphJournalPath(void) {
 }
 
 static NSString *KPGlyphCursorPath(void) {
-    return [KPGlyphDocumentsPath() stringByAppendingPathComponent:@"kexproofv3-glyph-next.txt"];
+    return [KPGlyphDocumentsPath() stringByAppendingPathComponent:@"kexproofv3-glyph-route-next.txt"];
 }
 
 static NSUInteger KPGlyphReadCursor(void) {
@@ -609,17 +819,21 @@ static void KPGlyphRestoreSignals(struct sigaction oldActions[KP_GLYPH_SIGNAL_CO
     NSMutableString *report = [NSMutableString string];
     [report appendString:@"=== KexProofV3 Glyph Grift safe PDF probe ===\n"];
     [report appendFormat:@"App version: %@\nDevice OS: %@\n",
-     [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.3.0",
+     [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.3.1",
      NSProcessInfo.processInfo.operatingSystemVersionString];
     [report appendString:@"Route: CGPDFDocument -> CGBitmapContext -> CGContextDrawPDFPage; font smoothing disabled. Safe row parses all bundled PDFs but renders only the standard non-extreme control. No armed PDF is rendered here.\n"];
     BOOL allMatched = YES;
     NSURL *benignURL = nil;
-    const KPGlyphVariant *variants[1 + KPGlyphArmedVariantCount];
+    const KPGlyphVariant *variants[1 + KPGlyphArmedVariantCount + KPGlyphPassiveVariantCount];
     variants[0] = &KPGlyphBenign;
     for (NSUInteger index = 0; index < KPGlyphArmedVariantCount; index++) variants[index + 1] = &KPGlyphArmedVariants[index];
-    for (NSUInteger index = 0; index < 1 + KPGlyphArmedVariantCount; index++) {
+    for (NSUInteger index = 0; index < KPGlyphPassiveVariantCount; index++) variants[1 + KPGlyphArmedVariantCount + index] = &KPGlyphPassiveVariants[index];
+    NSMutableSet<NSString *> *seen = [NSMutableSet set];
+    for (NSUInteger index = 0; index < 1 + KPGlyphArmedVariantCount + KPGlyphPassiveVariantCount; index++) {
         const KPGlyphVariant *variant = variants[index];
         NSString *resource = [NSString stringWithUTF8String:variant->resource];
+        if ([seen containsObject:resource]) continue;
+        [seen addObject:resource];
         NSURL *URL = [NSBundle.mainBundle URLForResource:resource withExtension:@"pdf"];
         if (!URL) {
             allMatched = NO;
@@ -630,12 +844,12 @@ static void KPGlyphRestoreSignals(struct sigaction oldActions[KP_GLYPH_SIGNAL_CO
         allMatched = allMatched && matched;
         if (index == 0) benignURL = matched ? URL : nil;
     }
-    [report appendFormat:@"\n=== Structure summary ===\n%@\n", allMatched ? @"ALL 8 PDF STRUCTURES MATCH" : @"STRUCTURE CHECK FAILED"];
+    [report appendFormat:@"\n=== Structure summary ===\n%@\n", allMatched ? @"ALL 9 PDF STRUCTURES MATCH" : @"STRUCTURE CHECK FAILED"];
     if (!benignURL) {
         [report appendString:@"BENIGN RENDER SKIPPED: standard PDF missing or malformed.\n"];
         return report;
     }
-    NSDictionary *rendered = KPGlyphRenderPDF(benignURL);
+    NSDictionary *rendered = KPGlyphRenderPDF(benignURL, YES);
     [report appendFormat:@"BENIGN id=benign-standard result=%@ pages=%@ image=%@ detail=%@\n",
      rendered[@"status"], rendered[@"pages"] ?: @0, rendered[@"image"] ?: @"none", rendered[@"detail"] ?: @"none"];
     [report appendString:@"The benign result validates only this generic CGPDF render route. It does not prove reachability of the vulnerable glyph cache path.\n"];
@@ -647,9 +861,9 @@ static void KPGlyphRestoreSignals(struct sigaction oldActions[KP_GLYPH_SIGNAL_CO
     NSMutableString *report = [NSMutableString string];
     [report appendString:@"=== KexProofV3 Glyph Grift ARMED render probe ===\n"];
     [report appendFormat:@"App version: %@\nDevice OS: %@\n",
-     [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.3.0",
+     [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.3.1",
      NSProcessInfo.processInfo.operatingSystemVersionString];
-    [report appendString:@"Bounded to at most seven single-page renders. Route is direct CGPDFDocument/CGContextDrawPDFPage, not the original ImageIO thumbnail harness. No spray, reclaim, CFData corruption, kernel operation or legacy exploit engine is used.\n"];
+    [report appendString:@"Bounded to at most nine renders across direct CGFont, ImageIO thumbnail and natural/scaled CGPDF routes. The old 200->256 g3 route is retained as a negative control. No spray, reclaim, CFData corruption, kernel operation or legacy exploit engine is used.\n"];
     [report appendString:@"WARNING: a CRASH record is evidence for triage, not a proven primitive. RENDERED_SURVIVED or an unchanged local canary does not disprove OOB corruption.\n"];
     [report appendFormat:@"Journal: %@\nCursor: %@\n", KPGlyphJournalPath(), KPGlyphCursorPath()];
     [report appendFormat:@"Previous journal events (last 24):\n%@\n", KPGlyphJournalTail()];
@@ -673,9 +887,12 @@ static void KPGlyphRestoreSignals(struct sigaction oldActions[KP_GLYPH_SIGNAL_CO
         error = nil;
         NSDictionary *info = URL ? KPGlyphInspectPDF(URL, &error) : nil;
         NSString *sha = info[@"sha256"] ?: @"unavailable";
+        const char *routeName = variant->route == KPGlyphRouteCGPDFScaled ? "CGPDF-scaled" :
+            variant->route == KPGlyphRouteCGPDFNatural ? "CGPDF-natural" :
+            variant->route == KPGlyphRouteImageIO ? "ImageIO-thumbnail" : "CGFont-direct";
         NSString *begin = [NSString stringWithFormat:
-                           @"BEGIN id=%s index=%lu resource=%s.pdf tx=%d dx=%d n=%d operation=%s arena=%s canaryBytes=%u sha256=%@ os=%@",
-                           variant->identifier, (unsigned long)index, variant->resource,
+                           @"BEGIN id=%s index=%lu resource=%s.pdf route=%s tx=%d dx=%d n=%d operation=%s arena=%s canaryBytes=%u sha256=%@ os=%@",
+                           variant->identifier, (unsigned long)index, variant->resource, routeName,
                            variant->triggerX, variant->dx, variant->depth, variant->operation,
                            variant->arena, KP_GLYPH_CANARY_SIZE, sha,
                            NSProcessInfo.processInfo.operatingSystemVersionString];
@@ -727,16 +944,16 @@ static void KPGlyphRestoreSignals(struct sigaction oldActions[KP_GLYPH_SIGNAL_CO
             [report appendFormat:@"%@\n", end];
             continue;
         }
-        NSDictionary *rendered = KPGlyphRenderPDF(URL);
+        NSDictionary *rendered = KPGlyphRenderVariant(variant, URL, info);
         KPGlyphRestoreSignals(oldActions, installed);
         NSString *canaryResult = KPGlyphCheckCanary(canary);
         free(canary);
         NSString *end = [NSString stringWithFormat:
-                         @"END id=%s index=%lu result=%@ pages=%@ image=%@ canary=%@ detail=%@",
-                         variant->identifier, (unsigned long)index,
+                         @"END id=%s index=%lu route=%@ result=%@ pages=%@ image=%@ pageScale=%@ canary=%@ detail=%@",
+                         variant->identifier, (unsigned long)index, rendered[@"route"] ?: @"unknown",
                          rendered[@"status"], rendered[@"pages"] ?: @0,
-                         rendered[@"image"] ?: @"none", canaryResult,
-                         rendered[@"detail"] ?: @"none"];
+                         rendered[@"image"] ?: @"none", rendered[@"pageScale"] ?: @"none",
+                         canaryResult, rendered[@"detail"] ?: @"none"];
         if (!KPGlyphJournalLine(journalFD, end, YES)) {
             [KPLog.shared appendFormat:@"GLYPH journal END failed for id=%s", variant->identifier];
         }

@@ -7,7 +7,7 @@ include $(THEOS)/makefiles/common.mk
 APPLICATION_NAME = KexProofV3
 
 KexProofV3_FILES = $(wildcard Sources/*.m)
-KexProofV3_FRAMEWORKS = UIKit Foundation CoreFoundation QuartzCore Security IOSurface CoreGraphics
+KexProofV3_FRAMEWORKS = UIKit Foundation CoreFoundation QuartzCore Security IOSurface CoreGraphics ImageIO
 KexProofV3_PRIVATE_FRAMEWORKS = IOKit
 KexProofV3_LDFLAGS = -lz
 KexProofV3_CFLAGS = -fobjc-arc -O2 -Wall -Wextra -Wno-error -Wno-deprecated-declarations -ISources -DKP_IOSURFACE27_ENABLE_RACE=1 -DKP_IOAUDIO27_ENABLE_ARMED=1 -DKP_M2SCALER27_ENABLE_ARMED=1 -DKP_AGXSPILL27_ENABLE_ARMED=1 -DKP_IOKIT_FUZZER_ENABLE_ARMED=1 -DKP_GLYPH27_ENABLE_ARMED=1

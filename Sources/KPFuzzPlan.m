@@ -28,7 +28,7 @@ const KPFuzzSelectorPlan KPFuzzPlans[] = {
 const NSUInteger KPFuzzPlanCount = sizeof(KPFuzzPlans) / sizeof(KPFuzzPlans[0]);
 const NSUInteger KPFuzzTotalBudget = 3050;
 const uint64_t KPFuzzDefaultRunSeed = 0x4b50465a5a000002ULL;
-NSString * const KPFuzzBuildVersion = @"3.3.0";
+NSString * const KPFuzzBuildVersion = @"3.3.1";
 
 NSString *KPFuzzFamilyName(KPFuzzFamily family) {
     switch (family) {
