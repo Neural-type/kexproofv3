@@ -5,6 +5,7 @@
 #import "KPIOAudioCodecsProbeModule.h"
 #import "KPM2ScalerProbeModule.h"
 #import "KPFuzzModule.h"
+#import "KPGlyphProbeModule.h"
 #import "KPLog.h"
 #import "KPLogViewController.h"
 #import "KPReportStore.h"
@@ -48,7 +49,7 @@
     [self configureTable];
     [self updateRunButton];
 
-    NSString *version = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.1.0";
+    NSString *version = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.3.0";
     [KPLog.shared appendFormat:@"=== KexProofV3 %@ started @ %@ ===", version, [NSDate date]];
     [KPLog.shared append:@"Clean iOS 27 research workbench. No exploit engine or legacy binary resources bundled."];
 }
@@ -75,6 +76,8 @@
                                              details:@"AMFI DER entitlement input generation and trust-validation hooks."],
         [[KPM2ScalerProbeModule alloc] init],
         [[KPM2ScalerProbeModule alloc] initWithArmed:YES],
+        [[KPGlyphProbeModule alloc] initWithArmed:NO],
+        [[KPGlyphProbeModule alloc] initWithArmed:YES],
         [[KPFuzzModule alloc] initWithArmed:NO],
         [[KPFuzzModule alloc] initWithArmed:YES]
     ];
@@ -92,7 +95,7 @@
     self.headerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 390, 260)];
 
     UILabel *versionLabel = [[UILabel alloc] init];
-    NSString *version = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.1.0";
+    NSString *version = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.3.0";
     versionLabel.text = [NSString stringWithFormat:@"KexProofV3 · %@", version];
     versionLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
     versionLabel.textColor = UIColor.labelColor;
@@ -196,6 +199,7 @@
         if ([module.identifier isEqualToString:@"ioaudio27.panic"]) continue;
         if ([module.identifier isEqualToString:@"m2scaler27.race"]) continue;
         if ([module.identifier isEqualToString:@"agx27.spill.armed"]) continue;
+        if ([module.identifier isEqualToString:@"glyph27.render.armed"]) continue;
         if ([module.identifier isEqualToString:@"iokit.fuzzer.armed"]) continue;
         [safeModules addObject:module];
     }
@@ -275,7 +279,7 @@
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (section == KPTestSectionKernelProbes) {
-        return @"Defaults are non-destructive. Fuzzer info returns the bounded target plan only. Dedicated armed rows, including IOKit Fuzzer, may panic the kernel and are excluded from Run All. Remaining probes return NOT IMPLEMENTED.";
+        return @"Defaults are non-destructive. Fuzzer info returns the bounded target plan only. Dedicated armed rows, including Glyph Grift and IOKit Fuzzer, may crash the app or panic the kernel and are excluded from Run All. Remaining probes return NOT IMPLEMENTED.";
     }
     return nil;
 }
