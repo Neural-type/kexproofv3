@@ -5,23 +5,30 @@ const KPFuzzSelectorPlan KPFuzzPlans[] = {
     {KPFuzzFamilyIOGPU, KPFuzzSelectorAGXShmem, 12, 100, 2, 0, 0x10},
     {KPFuzzFamilyIOGPU, KPFuzzSelectorAGXNotification, 14, 100, 2, 0, 0x10},
     {KPFuzzFamilyIOGPU, KPFuzzSelectorAGXSubmit, 25, 100, 4, 0x40, 0},
+    {KPFuzzFamilyIOGPU, KPFuzzSelectorAGXCreateIOQueue, 42, 150, 2, 0, 0},
+    {KPFuzzFamilyIOGPU, KPFuzzSelectorAGXSubmitIOCommands, 45, 150, 1, 8, 0},
+    {KPFuzzFamilyIOSurface, KPFuzzSelectorIOSurfaceLookup, 4, 150, 1, 0, 0xc68},
     {KPFuzzFamilyIOSurface, KPFuzzSelectorIOSurfaceCreate, 6, 133, 0, 0x20, 0xc68},
+    {KPFuzzFamilyIOSurface, KPFuzzSelectorIOSurfaceScalarQuery, 8, 150, 1, 0, 0},
+    {KPFuzzFamilyIOSurface, KPFuzzSelectorIOSurfaceGetValue, 10, 150, 0, 26, 4096},
+    {KPFuzzFamilyIOSurface, KPFuzzSelectorIOSurfaceRemoveValue, 11, 150, 0, 26, 4},
     {KPFuzzFamilyIOSurface, KPFuzzSelectorIOSurfaceIncrement, 14, 133, 2, 0, 0},
     {KPFuzzFamilyIOSurface, KPFuzzSelectorIOSurfaceDecrement, 15, 134, 2, 0, 0},
+    {KPFuzzFamilyIOSurface, KPFuzzSelectorIOSurfaceScalarQuery, 16, 150, 1, 0, 0},
     {KPFuzzFamilyM2Scaler, KPFuzzSelectorM2Submit, 1, 150, 3, 0x1b0, 0},
     {KPFuzzFamilyM2Scaler, KPFuzzSelectorM2Credit, 10, 150, 3, 0x18, 0},
-    {KPFuzzFamilyIOMobileFramebuffer, KPFuzzSelectorIOMFBScalar, 6, 150, 3, 0, 0},
+    {KPFuzzFamilyIOMobileFramebuffer, KPFuzzSelectorIOMFBQuery, 3, 150, 2, 0, 0},
     {KPFuzzFamilyIOMobileFramebuffer, KPFuzzSelectorIOMFBScalar, 13, 150, 1, 0, 0},
-    {KPFuzzFamilyFastPath, KPFuzzSelectorFastPathOpen, 0, 150, 1, 0, 0},
-    {KPFuzzFamilyFastPath, KPFuzzSelectorFastPathCopy, 2, 150, 2, 0, 0},
+    {KPFuzzFamilyIOMobileFramebuffer, KPFuzzSelectorIOMFBQuery, 14, 150, 2, 0, 0},
+    {KPFuzzFamilyIOMobileFramebuffer, KPFuzzSelectorIOMFBQuery, 15, 150, 2, 0, 0},
     {KPFuzzFamilyJPEG, KPFuzzSelectorJPEGDecode, 1, 150, 0, 0x58, 0x58},
     {KPFuzzFamilyJPEG, KPFuzzSelectorJPEGEncode, 3, 150, 0, 0x58, 0x58},
 };
 
 const NSUInteger KPFuzzPlanCount = sizeof(KPFuzzPlans) / sizeof(KPFuzzPlans[0]);
-const NSUInteger KPFuzzTotalBudget = 2000;
-const uint64_t KPFuzzDefaultRunSeed = 0x4b50465a5a000001ULL;
-NSString * const KPFuzzBuildVersion = @"3.1.1";
+const NSUInteger KPFuzzTotalBudget = 3050;
+const uint64_t KPFuzzDefaultRunSeed = 0x4b50465a5a000002ULL;
+NSString * const KPFuzzBuildVersion = @"3.2.0";
 
 NSString *KPFuzzFamilyName(KPFuzzFamily family) {
     switch (family) {
@@ -68,12 +75,19 @@ NSString *KPFuzzSelectorKindName(KPFuzzSelectorKind kind) {
         case KPFuzzSelectorAGXShmem: return @"agx.shmem-create";
         case KPFuzzSelectorAGXNotification: return @"agx.notification-create";
         case KPFuzzSelectorAGXSubmit: return @"agx.submit";
+        case KPFuzzSelectorAGXCreateIOQueue: return @"agx.io-queue-create";
+        case KPFuzzSelectorAGXSubmitIOCommands: return @"agx.submit-io-commands";
         case KPFuzzSelectorIOSurfaceCreate: return @"iosurface.fast-create";
+        case KPFuzzSelectorIOSurfaceLookup: return @"iosurface.lookup";
+        case KPFuzzSelectorIOSurfaceScalarQuery: return @"iosurface.scalar-query";
+        case KPFuzzSelectorIOSurfaceGetValue: return @"iosurface.get-value";
+        case KPFuzzSelectorIOSurfaceRemoveValue: return @"iosurface.remove-value";
         case KPFuzzSelectorIOSurfaceIncrement: return @"iosurface.use-increment";
         case KPFuzzSelectorIOSurfaceDecrement: return @"iosurface.use-decrement";
         case KPFuzzSelectorM2Submit: return @"m2.tsd-submit";
         case KPFuzzSelectorM2Credit: return @"m2.credit";
         case KPFuzzSelectorIOMFBScalar: return @"iomfb.scalar";
+        case KPFuzzSelectorIOMFBQuery: return @"iomfb.query";
         case KPFuzzSelectorFastPathOpen: return @"fastpath.open";
         case KPFuzzSelectorFastPathCopy: return @"fastpath.copy-event";
         case KPFuzzSelectorJPEGDecode: return @"jpeg.decode";
@@ -84,11 +98,11 @@ NSString *KPFuzzSelectorKindName(KPFuzzSelectorKind kind) {
 
 NSString *KPFuzzPlanSummary(void) {
     return [NSString stringWithFormat:
-            @"6 families / 15 active selectors / %lu fuzz calls max\n"
-            @"IOGPU sel 6,12,14,25 (400) · IOSurface sel 6,14,15 (400) · M2 sel 1,10 (300)\n"
-            @"IOMFB sel 6,13 (300) · FastPath sel 0,2 (300) · JPEG sel 1,3 (300)\n"
-            @"Deferred: JPEG Ext/2024 sel 4,5,6,7 and lifecycle/privileged/destructive methods.\n"
-            @"Valid real IDs only; sync calls; no spray, KRW, async API or race threads.",
+            @"Wave 2: 5 families / 22 active selectors / %lu fuzz calls max\n"
+            @"IOGPU sel 6,12,14,25,42,45 (700) · IOSurface sel 4,6,8,10,11,14,15,16 (1150)\n"
+            @"M2 sel 1,10 (300) · IOMFB sel 3,13,14,15 (600) · JPEG sel 1,3 (300)\n"
+            @"Dropped: FastPath sel 0,2 (32/32 exclusive) and IOMFB sel 6 (NoPower). IOGPU sel 8/22 not added.\n"
+            @"Real baseline objects and selector-specific ID policies; sync calls; no spray, KRW, async API or race threads.",
             (unsigned long)KPFuzzTotalBudget];
 }
 

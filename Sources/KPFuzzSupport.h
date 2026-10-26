@@ -30,6 +30,7 @@ typedef struct {
     io_connect_t connection;
     io_connect_t surfaceConnection;
     uint32_t queueID;
+    uint32_t ioQueueID;
     uint32_t notificationID;
     KPFuzzShmem command;
     KPFuzzShmem segments;
@@ -37,6 +38,7 @@ typedef struct {
     uint32_t sourceID;
     uint32_t destID;
     uint32_t serviceIndex;
+    IOSurfaceRef valueSurface;
     IOSurfaceRef jpegSource;
     IOSurfaceRef jpegDest;
     NSData *jpegData;

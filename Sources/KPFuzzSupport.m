@@ -303,10 +303,26 @@ static kern_return_t KPFuzzAGXBindNotification(KPFuzzSession *session) {
                                NULL, NULL, NULL, NULL);
 }
 
+static kern_return_t KPFuzzAGXCreateIOCommandQueue(KPFuzzSession *session) {
+    uint64_t scalars[2] = {0, 0};
+    uint64_t output[2] = {0, 0};
+    uint32_t outputCount = 2;
+    kern_return_t kr = IOConnectCallMethod(session->connection, 42,
+                                           scalars, 2,
+                                           NULL, 0,
+                                           output, &outputCount,
+                                           NULL, NULL);
+    if (kr == KERN_SUCCESS) {
+        if (outputCount != 2 || !output[0] || output[0] > UINT32_MAX) return kIOReturnError;
+        session->ioQueueID = (uint32_t)output[0];
+    }
+    return kr;
+}
+
 static kern_return_t KPFuzzCreateJPEGSurfaces(KPFuzzSession *session, NSMutableString *report) {
-    UIGraphicsBeginImageContext(CGSizeMake(16, 16));
+    UIGraphicsBeginImageContext(CGSizeMake(64, 64));
     [UIColor.redColor setFill];
-    UIRectFill(CGRectMake(0, 0, 16, 16));
+    UIRectFill(CGRectMake(0, 0, 64, 64));
     UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
     NSData *jpeg = UIImageJPEGRepresentation(image, 0.9);
@@ -335,7 +351,24 @@ static kern_return_t KPFuzzCreateJPEGSurfaces(KPFuzzSession *session, NSMutableS
     void *base = IOSurfaceGetBaseAddress(source);
     if (base) memcpy(base, jpeg.bytes, jpeg.length);
     IOSurfaceUnlock(source, 0, NULL);
-    if (!base) {
+    IOSurfaceLock(dest, 0, NULL);
+    uint8_t *raw = (uint8_t *)IOSurfaceGetBaseAddress(dest);
+    size_t bytesPerRow = IOSurfaceGetBytesPerRow(dest);
+    if (raw && bytesPerRow >= 64 * 4 && IOSurfaceGetAllocSize(dest) >= bytesPerRow * 64) {
+        for (uint32_t y = 0; y < 64; y++) {
+            for (uint32_t x = 0; x < 64; x++) {
+                uint8_t *pixel = raw + y * bytesPerRow + x * 4;
+                pixel[0] = 0;
+                pixel[1] = 0;
+                pixel[2] = 0xff;
+                pixel[3] = 0xff;
+            }
+        }
+    } else {
+        raw = NULL;
+    }
+    IOSurfaceUnlock(dest, 0, NULL);
+    if (!base || !raw) {
         CFRelease(source);
         CFRelease(dest);
         return kIOReturnNoResources;
@@ -347,8 +380,29 @@ static kern_return_t KPFuzzCreateJPEGSurfaces(KPFuzzSession *session, NSMutableS
     session->sourceID = IOSurfaceGetID(source);
     session->destID = IOSurfaceGetID(dest);
     if (!session->sourceID || !session->destID) return kIOReturnError;
-    [report appendFormat:@"  JPEG baseline: source=%u dest=%u bytes=%zu dimensions=64x64 async=0\n",
+    [report appendFormat:@"  JPEG baseline: source=%u dest=%u bytes=%zu dimensions=64x64 raw=BGRA-red async=0\n",
      session->sourceID, session->destID, jpeg.length];
+    return KERN_SUCCESS;
+}
+
+static kern_return_t KPFuzzCreateValueSurface(KPFuzzSession *session, NSMutableString *report) {
+    NSDictionary *properties = @{
+        (id)kIOSurfaceWidth: @64,
+        (id)kIOSurfaceHeight: @64,
+        (id)kIOSurfaceBytesPerElement: @4,
+        (id)kIOSurfacePixelFormat: @0x42475241
+    };
+    IOSurfaceRef surface = IOSurfaceCreate((__bridge CFDictionaryRef)properties);
+    if (!surface) return kIOReturnNoResources;
+    session->valueSurface = surface;
+    session->surfaceID = IOSurfaceGetID(surface);
+    if (!session->surfaceID) return kIOReturnError;
+    IOSurfaceSetValue(surface, CFSTR("KexProofWave2"), CFSTR("wave2"));
+    CFTypeRef baselineValue = IOSurfaceCopyValue(surface, CFSTR("KexProofWave2"));
+    if (!baselineValue) return kIOReturnError;
+    CFRelease(baselineValue);
+    [report appendFormat:@"  IOSurface value baseline: id=%u key=KexProofWave2 value=wave2\n",
+     session->surfaceID];
     return KERN_SUCCESS;
 }
 
@@ -424,6 +478,7 @@ kern_return_t KPFuzzSessionStart(const KPFuzzSelectorPlan *plan, io_service_t fa
         case KPFuzzSelectorAGXQueue:
         case KPFuzzSelectorAGXShmem:
         case KPFuzzSelectorAGXNotification:
+        case KPFuzzSelectorAGXCreateIOQueue:
         case KPFuzzSelectorIOSurfaceCreate:
             session->surfaceConnection = session->connection;
             return KERN_SUCCESS;
@@ -434,10 +489,20 @@ kern_return_t KPFuzzSessionStart(const KPFuzzSelectorPlan *plan, io_service_t fa
             if (kr == KERN_SUCCESS) kr = KPFuzzAGXCreateShmem(session, &session->segments);
             if (kr == KERN_SUCCESS) kr = KPFuzzAGXBindNotification(session);
             break;
+        case KPFuzzSelectorAGXSubmitIOCommands:
+            kr = KPFuzzAGXCreateIOCommandQueue(session);
+            break;
+        case KPFuzzSelectorIOSurfaceLookup:
+        case KPFuzzSelectorIOSurfaceScalarQuery:
         case KPFuzzSelectorIOSurfaceIncrement:
         case KPFuzzSelectorIOSurfaceDecrement:
             session->surfaceConnection = session->connection;
             kr = KPFuzzCreateSurface(session->surfaceConnection, 64, 64, &session->surfaceID);
+            break;
+        case KPFuzzSelectorIOSurfaceGetValue:
+        case KPFuzzSelectorIOSurfaceRemoveValue:
+            session->surfaceConnection = session->connection;
+            kr = KPFuzzCreateValueSurface(session, report);
             break;
         case KPFuzzSelectorM2Submit:
         case KPFuzzSelectorM2Credit: {
@@ -450,6 +515,7 @@ kern_return_t KPFuzzSessionStart(const KPFuzzSelectorPlan *plan, io_service_t fa
             break;
         }
         case KPFuzzSelectorIOMFBScalar:
+        case KPFuzzSelectorIOMFBQuery:
         case KPFuzzSelectorFastPathOpen:
             return KERN_SUCCESS;
         case KPFuzzSelectorFastPathCopy:
@@ -474,14 +540,25 @@ void KPFuzzSessionEnd(const KPFuzzSelectorPlan *plan, KPFuzzSession *session) {
         case KPFuzzSelectorAGXShmem:
         case KPFuzzSelectorAGXNotification:
         case KPFuzzSelectorAGXSubmit:
+        case KPFuzzSelectorAGXCreateIOQueue:
+        case KPFuzzSelectorAGXSubmitIOCommands:
         case KPFuzzSelectorIOMFBScalar:
+        case KPFuzzSelectorIOMFBQuery:
         case KPFuzzSelectorFastPathOpen:
         case KPFuzzSelectorFastPathCopy:
             break;
         case KPFuzzSelectorIOSurfaceCreate:
+        case KPFuzzSelectorIOSurfaceLookup:
+        case KPFuzzSelectorIOSurfaceScalarQuery:
         case KPFuzzSelectorIOSurfaceIncrement:
         case KPFuzzSelectorIOSurfaceDecrement:
             KPFuzzReleaseSurface(session->surfaceConnection, session->surfaceID);
+            session->surfaceID = 0;
+            break;
+        case KPFuzzSelectorIOSurfaceGetValue:
+        case KPFuzzSelectorIOSurfaceRemoveValue:
+            if (session->valueSurface) CFRelease(session->valueSurface);
+            session->valueSurface = NULL;
             session->surfaceID = 0;
             break;
         case KPFuzzSelectorM2Submit:
@@ -643,9 +720,14 @@ static void KPFuzzApplyFieldPolicies(const KPFuzzSelectorPlan *plan,
     static const uint64_t subsampling[] = {0, 1, 3, 4};
     switch (plan->kind) {
         case KPFuzzSelectorAGXQueue:
+        case KPFuzzSelectorAGXCreateIOQueue:
         case KPFuzzSelectorM2Submit:
         case KPFuzzSelectorIOMFBScalar:
+        case KPFuzzSelectorIOMFBQuery:
         case KPFuzzSelectorFastPathOpen:
+        case KPFuzzSelectorIOSurfaceLookup:
+        case KPFuzzSelectorIOSurfaceScalarQuery:
+        case KPFuzzSelectorIOSurfaceRemoveValue:
             break;
         case KPFuzzSelectorAGXShmem:
             call->scalarInput[0] = KPFuzzSafeValue(state, allocationSizes,
@@ -662,12 +744,25 @@ static void KPFuzzApplyFieldPolicies(const KPFuzzSelectorPlan *plan,
             call->scalarInput[2] = iteration % 5 == 0 ? 1 : iteration % 3;
             call->scalarInput[3] = call->structInputCount;
             break;
+        case KPFuzzSelectorAGXSubmitIOCommands:
+            if (call->structInputCount >= 8) {
+                size_t payloadSize = call->structInputCount - 8;
+                if (payloadSize % 24 == 0) {
+                    KPFuzzPut32(call->structInput, 0, (uint32_t)(payloadSize / 24));
+                }
+            }
+            break;
         case KPFuzzSelectorIOSurfaceCreate:
             KPFuzzPut32(call->structInput, 8, (uint32_t)KPFuzzSafeValue(state, dimensions, sizeof(dimensions) / sizeof(dimensions[0])));
             KPFuzzPut32(call->structInput, 12, (uint32_t)KPFuzzSafeValue(state, dimensions, sizeof(dimensions) / sizeof(dimensions[0])));
             KPFuzzPut32(call->structInput, 20, (uint32_t)KPFuzzSafeValue(state, elementSizes, sizeof(elementSizes) / sizeof(elementSizes[0])));
             KPFuzzPut32(call->structInput, 24, (uint32_t)KPFuzzSafeValue(state, allocationSizes, sizeof(allocationSizes) / sizeof(allocationSizes[0])));
             KPFuzzPut32(call->structInput, 28, (uint32_t)KPFuzzSafeValue(state, allocationSizes, sizeof(allocationSizes) / sizeof(allocationSizes[0])));
+            break;
+        case KPFuzzSelectorIOSurfaceGetValue:
+            call->structOutputCapacity = KPFuzzVariableLengths[KPFuzzNext(state) %
+                (sizeof(KPFuzzVariableLengths) / sizeof(KPFuzzVariableLengths[0]))];
+            call->structOutputCount = call->structOutputCapacity;
             break;
         case KPFuzzSelectorIOSurfaceIncrement:
         case KPFuzzSelectorIOSurfaceDecrement:
@@ -737,6 +832,15 @@ void KPFuzzPrepareCall(const KPFuzzSelectorPlan *plan, NSUInteger planIndex, con
             variableLength = YES;
             break;
         }
+        case KPFuzzSelectorAGXCreateIOQueue:
+            call->scalarOutputCount = 2;
+            break;
+        case KPFuzzSelectorAGXSubmitIOCommands:
+            call->scalarInput[0] = session->ioQueueID;
+            preserveMask = 1;
+            ranges[rangeCount++] = (KPFuzzRange){0, 8};
+            variableLength = YES;
+            break;
         case KPFuzzSelectorIOSurfaceCreate: {
             KPFuzzFastCreateArgs *args = (KPFuzzFastCreateArgs *)call->structInput;
             args->width = 64;
@@ -747,6 +851,23 @@ void KPFuzzPrepareCall(const KPFuzzSelectorPlan *plan, NSUInteger planIndex, con
             args->allocSize = 0x4000;
             ranges[rangeCount++] = (KPFuzzRange){0, 8};
             ranges[rangeCount++] = (KPFuzzRange){16, 4};
+            break;
+        }
+        case KPFuzzSelectorIOSurfaceLookup:
+            call->scalarInput[0] = session->surfaceID;
+            break;
+        case KPFuzzSelectorIOSurfaceScalarQuery:
+            call->scalarInput[0] = session->surfaceID;
+            call->scalarOutputCount = 1;
+            break;
+        case KPFuzzSelectorIOSurfaceGetValue:
+        case KPFuzzSelectorIOSurfaceRemoveValue: {
+            static const char key[] = "KexProofWave2";
+            KPFuzzPut32(call->structInput, 0, session->surfaceID);
+            memcpy(call->structInput + 12, key, sizeof(key));
+            call->structInputCount = 12 + sizeof(key);
+            ranges[rangeCount++] = (KPFuzzRange){0, 4};
+            variableLength = YES;
             break;
         }
         case KPFuzzSelectorIOSurfaceIncrement:
@@ -764,6 +885,9 @@ void KPFuzzPrepareCall(const KPFuzzSelectorPlan *plan, NSUInteger planIndex, con
         case KPFuzzSelectorM2Credit:
             break;
         case KPFuzzSelectorIOMFBScalar:
+            break;
+        case KPFuzzSelectorIOMFBQuery:
+            call->scalarOutputCount = 1;
             break;
         case KPFuzzSelectorFastPathOpen: {
             static const char xml[] =
@@ -793,7 +917,8 @@ void KPFuzzPrepareCall(const KPFuzzSelectorPlan *plan, NSUInteger planIndex, con
             KPFuzzPut32(call->structInput, 12, decode ? 64 * 64 * 4 : (uint32_t)IOSurfaceGetAllocSize(session->jpegSource));
             KPFuzzPut32(call->structInput, 20, 64);
             KPFuzzPut32(call->structInput, 24, 64);
-            KPFuzzPut32(call->structInput, 44, decode ? 0 : 3);
+            KPFuzzPut32(call->structInput, 28, decode ? 0 : 9);
+            KPFuzzPut32(call->structInput, 44, 3);
             KPFuzzPut64(call->structInput, 48, 0);
             KPFuzzPut64(call->structInput, 56, 0);
             KPFuzzPut32(call->structInput, 72, 0);
@@ -830,7 +955,7 @@ static BOOL KPFuzzReproBegin(const KPFuzzSelectorPlan *plan,
                      KPFuzzHex(command, 0x330), KPFuzzHex(segments, 0x40)];
     } else if ((plan->kind == KPFuzzSelectorJPEGDecode || plan->kind == KPFuzzSelectorJPEGEncode) &&
                iteration == 0 && session->jpegData) {
-        auxiliary = [NSString stringWithFormat:@" jpegData=%@",
+        auxiliary = [NSString stringWithFormat:@" raw=BGRA-red-64x64 jpegData=%@",
                      KPFuzzHex(session->jpegData.bytes, session->jpegData.length)];
     }
     NSString *line = [NSString stringWithFormat:

@@ -39,12 +39,12 @@ typedef struct {
         if (armed) {
             _identifier = @"iokit.fuzzer.armed";
             _title = @"IOKit Fuzzer";
-            _subtitle = @"ARMED structure-aware · 6 families · bounded 2000 calls";
+            _subtitle = @"ARMED wave 2 · 5 families · bounded 3050 calls";
             _icon = @"network";
         } else {
             _identifier = @"iokit.fuzzer.info";
             _title = @"IOKit Fuzzer Info";
-            _subtitle = @"15 active selectors · deferred destructive/unknown layouts";
+            _subtitle = @"22 active selectors · baseline-first · dropped unreachable targets";
             _icon = @"info.circle";
         }
         _section = KPTestSectionKernelProbes;
@@ -57,11 +57,11 @@ typedef struct {
     [report appendFormat:@"=== KexProofV3 IOKit Fuzzer plan ===\n"];
     [report appendFormat:@"Version: %@; target: iPhone16,1 / A17 Pro / iOS 27.0.1\n", KPFuzzBuildVersion];
     [report appendFormat:@"%@\n", KPFuzzPlanSummary()];
-    [report appendString:@"\nFixed-size ABI is exact. Variable structs are capped at 4096 bytes. Required IDs come from real objects and are preserved. Allocation sizes and enum fields use bounded policies.\n"];
-    [report appendString:@"FastPath sel1, JPEG Ext/2024 and privileged/destructive methods are excluded. Cleanup close/release is allowed only for created baselines.\n"];
+    [report appendString:@"\nFixed-size ABI is exact. Variable structs are capped at 4096 bytes. Baseline objects and IDs are real; selector-specific preserve/mutation policies apply. Allocation sizes and enum fields are bounded.\n"];
+    [report appendString:@"Dropped on device evidence: FastPath sel 0,2 (32/32 exclusive) and IOMFB sel 6 (NoPower). IOGPU sel 8 (incomplete resource ABI) and sel 22 (Unsupported stub) were not added. JPEG Ext/2024 and privileged/destructive methods remain excluded.\n"];
     [report appendString:@"Repro: Documents/kexproofv3-fuzzer-<timestamp>-<runSeed>.log; BEGIN + full input is fsynced before every call; END follows with kr.\n"];
-    [report appendString:@"Iteration 0 is always the unmutated baseline; a baseline failure skips only that selector. Mutated kIOReturnBadArgument and AGX shmem zero-size kIOReturnNoMemory are expected rejections, never NACK skips.\n"];
-    [report appendString:@"Eight consecutive identical hard errors skip a selector, three setup failures skip a family, and 250 hard errors abort. FastPath baselines scan at most 32 services; 0xe00002c5 means exclusive/busy.\n"];
+    [report appendString:@"Iteration 0 is always the unmutated baseline; a baseline failure skips only that selector. Mutated kIOReturnBadArgument, KERN_INVALID_ARGUMENT and AGX shmem zero-size kIOReturnNoMemory are expected rejections, never NACK skips.\n"];
+    [report appendString:@"Wave-2 ABI was checked against tables2/methods (197 tables) and container evidence. Eight consecutive identical hard errors skip a selector, three setup failures skip a family, and 250 hard errors abort.\n"];
     [report appendString:@"No kernel operation was executed by this info row. No bug verdict is made without device evidence and triage.\n"];
     return report;
 }
@@ -71,7 +71,9 @@ static BOOL KPFuzzNeedsSessionPerIteration(KPFuzzSelectorKind kind) {
         case KPFuzzSelectorAGXQueue:
         case KPFuzzSelectorAGXShmem:
         case KPFuzzSelectorAGXNotification:
+        case KPFuzzSelectorAGXCreateIOQueue:
         case KPFuzzSelectorIOSurfaceCreate:
+        case KPFuzzSelectorIOSurfaceRemoveValue:
         case KPFuzzSelectorFastPathOpen:
             return YES;
         default:
@@ -80,7 +82,7 @@ static BOOL KPFuzzNeedsSessionPerIteration(KPFuzzSelectorKind kind) {
 }
 
 static BOOL KPFuzzExpectedMutationRejection(const KPFuzzSelectorPlan *plan, const KPFuzzCall *call, kern_return_t kr) {
-    if (kr == kIOReturnBadArgument) return YES;
+    if (kr == kIOReturnBadArgument || kr == KERN_INVALID_ARGUMENT) return YES;
     return plan->kind == KPFuzzSelectorAGXShmem &&
            kr == kIOReturnNoMemory &&
            call->scalarInputCount > 0 &&
@@ -283,9 +285,10 @@ static KPFuzzSelectorStats KPFuzzRunSelector(const KPFuzzSelectorPlan *plan,
     BOOL aborted = NO;
     for (KPFuzzFamily family = 0; family < KPFuzzFamilyCount && !aborted; family++) {
         uint32_t familySetupFailures = 0;
-        [report appendFormat:@"\n[%s]\n", KPFuzzFamilyName(family).UTF8String];
         NSUInteger first = KPFuzzFirstPlanIndexForFamily(family);
         NSUInteger count = KPFuzzPlanCountForFamily(family);
+        if (count == 0) continue;
+        [report appendFormat:@"\n[%s]\n", KPFuzzFamilyName(family).UTF8String];
         for (NSUInteger offset = 0; offset < count && !aborted; offset++) {
             NSUInteger planIndex = first + offset;
             const KPFuzzSelectorPlan *plan = &KPFuzzPlans[planIndex];
