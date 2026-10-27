@@ -16,7 +16,12 @@ def function_object(value):
 def build_pdf(range_dimension):
     if range_dimension < 1:
         raise ValueError("range dimension must be positive")
-    values = ["0.5"] if range_dimension == 1 else ["0.5"] + [0] * (range_dimension - 2) + [1]
+    if range_dimension == 1:
+        values = ["0.5"]
+    elif range_dimension == 12:
+        values = ["0.5", 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8]
+    else:
+        values = ["0.5"] + [0] * (range_dimension - 2) + [1]
     function_refs = " ".join(f"{6 + index} 0 R" for index in range(range_dimension))
     stream = bytes(component for row in range(ROWS) for x in range(VERTICES_PER_ROW) for component in (x, row, 0))
     content = b"q\n/S sh\nQ\n"
@@ -56,7 +61,7 @@ def main():
         raise SystemExit("usage: generate_cgtype5_pdfs.py [--check]")
     variants = {
         "cgtype5-benign.pdf": build_pdf(1),
-        "cgtype5-r6-heap.pdf": build_pdf(6),
+        "cgtype5-r6-heap.pdf": build_pdf(12),
     }
     for name, data in variants.items():
         destination = RESOURCES / name

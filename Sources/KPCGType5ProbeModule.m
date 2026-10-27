@@ -44,10 +44,10 @@ static const KPCGType5Variant KPCGType5Benign = {
 };
 
 static const KPCGType5Variant KPCGType5Armed = {
-    .identifier = "type5-r6-heap",
+    .identifier = "type5-r12-heap",
     .resource = "cgtype5-r6-heap",
-    .sha256 = "69afc1c275cdaaf9007b9712db29dee02e1152f6260c4d12d904358f4d061d69",
-    .rangeDimension = 6,
+    .sha256 = "5ca06ee8288851e062bbcd81de5e0bf2c522ab40646613dd81811749059aa09b",
+    .rangeDimension = 12,
     .colorSpaceComponents = 1,
     .verticesPerRow = 2,
     .rows = 130,
@@ -76,9 +76,9 @@ static size_t gType5IdentifierLength;
     if (self) {
         _armed = armed;
         _identifier = armed ? @"cgtype527.render.armed" : @"cgtype527.render.safe";
-        _title = armed ? @"CG Type 5 R6 ARMED" : @"CG Type 5 Safe Render";
+        _title = armed ? @"CG Type 5 R12 ARMED" : @"CG Type 5 Safe Render";
         _subtitle = armed
-            ? @"Explicit tap · R6/C1 · 258 triangles · crash may terminate app"
+            ? @"Explicit tap · R12/C1 · 258 triangles · crash may terminate app"
             : @"Valid Type 5 · R1/C1 · same 258-triangle render path";
         _icon = armed ? @"exclamationmark.triangle" : @"doc.text.magnifyingglass";
         _section = KPTestSectionKernelProbes;
@@ -376,7 +376,7 @@ static void KPCGType5AppendParams(NSMutableString *report, const KPCGType5Varian
     [report appendFormat:@"[%s] resource=%s.pdf size=%@ sha256=%@ structure=%@\n",
      variant->identifier, variant->resource, info[@"size"] ?: @0,
      info[@"sha256"] ?: @"unavailable", [info[@"matched"] boolValue] ? @"MATCH" : @"MISMATCH"];
-    [report appendFormat:@"  C=%u R=%u VPR=%u rows=%u triangles=%u allocation_model=0x%x first_OOB_model=B+0x%x visible_first_output=0.5 sixth_double=1.0\n",
+    [report appendFormat:@"  C=%u R=%u VPR=%u rows=%u triangles=%u allocation_model=0x%x first_OOB_model=B+0x%x visible_first_output=0.5 series=1.0..8.0\n",
      variant->colorSpaceComponents, variant->rangeDimension, variant->verticesPerRow,
      variant->rows, variant->triangles, variant->allocationSize, variant->allocationSize];
 }
@@ -387,7 +387,7 @@ static void KPCGType5AppendParams(NSMutableString *report, const KPCGType5Varian
     [report appendFormat:@"App version: %@\nDevice OS: %@\n",
      [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.4.0",
      NSProcessInfo.processInfo.operatingSystemVersionString];
-    [report appendString:@"Safe row renders only the valid R1/C1 resource. The R6 resource is checked by SHA-256 but is never rendered here.\n"];
+    [report appendString:@"Safe row renders only the valid R1/C1 resource. The R12 resource is checked by SHA-256 but is never rendered here.\n"];
     NSError *error = nil;
     NSDictionary *info = KPCGType5Inspect(&KPCGType5Benign, &error);
     if (!info) {
@@ -400,7 +400,7 @@ static void KPCGType5AppendParams(NSMutableString *report, const KPCGType5Varian
     if (armedInfo) {
         KPCGType5AppendParams(report, &KPCGType5Armed, armedInfo);
     } else {
-        [report appendFormat:@"[type5-r6-heap] STRUCTURE ERROR: %@\n", armedError.localizedDescription];
+        [report appendFormat:@"[type5-r12-heap] STRUCTURE ERROR: %@\n", armedError.localizedDescription];
     }
     if (![info[@"matched"] boolValue]) {
         [report appendString:@"BENIGN RENDER SKIPPED: resource mismatch.\n"];
@@ -417,11 +417,11 @@ static void KPCGType5AppendParams(NSMutableString *report, const KPCGType5Varian
 #if KP_CGTYPE527_ENABLE_ARMED
 - (NSString *)runArmed {
     NSMutableString *report = [NSMutableString string];
-    [report appendString:@"=== KexProofV3 CoreGraphics Type 5 R6 ARMED probe ===\n"];
+    [report appendString:@"=== KexProofV3 CoreGraphics Type 5 R12 ARMED probe ===\n"];
     [report appendFormat:@"App version: %@\nDevice OS: %@\n",
      [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.4.0",
      NSProcessInfo.processInfo.operatingSystemVersionString];
-    [report appendString:@"Bounded reference and R6 renders use the same visible first output (0.5). CRASH is triage evidence, not a proven primitive; reclaim and pointer targets remain unproven. RENDERED_SURVIVED does not disprove OOB corruption.\n"];
+    [report appendString:@"Bounded reference and R12 renders use the same visible first output (0.5). CRASH is triage evidence, not a proven primitive; reclaim and pointer targets remain unproven. RENDERED_SURVIVED does not disprove OOB corruption.\n"];
     [report appendString:@"PIXEL_DIFF_CHANGED shows an output side effect, not a unique OOB signature. PIXEL_DIFF_MATCH means no output-based oracle fired; it does not disprove OOB. No canary is claimed because B is internal and no allocator hooks are used.\n"];
     [report appendFormat:@"Journal: %@\nPrevious journal events (last 12):\n%@\n",
      KPCGType5JournalPath(), KPCGType5JournalTail()];
@@ -461,7 +461,7 @@ static void KPCGType5AppendParams(NSMutableString *report, const KPCGType5Varian
     }
     [report appendFormat:@"%@\n", referenceLine];
     NSString *begin = [NSString stringWithFormat:
-                       @"BEGIN id=type5-r6-heap resource=cgtype5-r6-heap.pdf route=CGPDFDocument-CGBitmapContext-CGContextDrawPDFPage C=1 R=6 VPR=2 rows=130 triangles=258 allocation_model=0xd9b0 first_OOB_model=B+0xd9b0 visible_first_output=0.5 sixth_double=1.0 canary=unavailable-no-private-B sha256=%@ reference_pixel_sha256=%@ os=%@",
+                       @"BEGIN id=type5-r12-heap resource=cgtype5-r6-heap.pdf route=CGPDFDocument-CGBitmapContext-CGContextDrawPDFPage C=1 R=12 VPR=2 rows=130 triangles=258 allocation_model=0xd9b0 first_OOB_model=B+0xd9b0 visible_first_output=0.5 series=1.0..8.0 canary=unavailable-no-private-B sha256=%@ reference_pixel_sha256=%@ os=%@",
                        info[@"sha256"], referenceRender[@"pixelSHA256"] ?: @"unavailable",
                        NSProcessInfo.processInfo.operatingSystemVersionString];
     if (!KPCGType5JournalLine(journalFD, begin, YES)) {
@@ -475,7 +475,7 @@ static void KPCGType5AppendParams(NSMutableString *report, const KPCGType5Varian
     struct sigaction oldActions[KP_CGTYPE5_SIGNAL_COUNT];
     NSUInteger installed = KPCGType5ArmSignals(journalFD, &KPCGType5Armed, oldActions);
     if (installed != KP_CGTYPE5_SIGNAL_COUNT) {
-        NSString *end = [NSString stringWithFormat:@"END id=type5-r6-heap result=SIGNAL_SETUP_FAILED errno=%d", errno];
+        NSString *end = [NSString stringWithFormat:@"END id=type5-r12-heap result=SIGNAL_SETUP_FAILED errno=%d", errno];
         KPCGType5JournalLine(journalFD, end, YES);
         [report appendFormat:@"%@; no armed render was attempted.\n", end];
         close(journalFD);
@@ -485,7 +485,7 @@ static void KPCGType5AppendParams(NSMutableString *report, const KPCGType5Varian
     KPCGType5RestoreSignals(oldActions, installed);
     NSDictionary *diff = KPCGType5PixelDiff(referenceRender, rendered);
     NSString *end = [NSString stringWithFormat:
-                     @"END id=type5-r6-heap route=%@ result=%@ pages=%@ image=%@ fault_address=none canary=not-claimed detail=%@ pixel_diff=%@ changed_bytes=%@ first_offsets=%@ first_sample=%@ reference_pixel_sha256=%@ armed_pixel_sha256=%@ triage=not-a-primitive",
+                     @"END id=type5-r12-heap route=%@ result=%@ pages=%@ image=%@ fault_address=none canary=not-claimed detail=%@ pixel_diff=%@ changed_bytes=%@ first_offsets=%@ first_sample=%@ reference_pixel_sha256=%@ armed_pixel_sha256=%@ triage=not-a-primitive",
                      rendered[@"route"] ?: @"unknown", rendered[@"status"], rendered[@"pages"] ?: @0,
                      rendered[@"image"] ?: @"none", rendered[@"detail"] ?: @"none",
                      diff[@"status"], diff[@"changedBytes"] ?: @0, diff[@"firstOffsets"] ?: @"none",
