@@ -63,7 +63,8 @@ jobs:
           EOF
           mkdir -p out/Payload
           cp -R "$(dirname "$BIN")" out/Payload/
-          ldid -SResources/entitlements.plist "$BIN" || true
+          codesign --sign - --force --timestamp=none --entitlements Resources/entitlements.plist "$BIN"
+          codesign --verify --verbose=2 "$BIN"
           (cd out && zip -qr KexProofV3-arm64e.ipa Payload)
 
       - name: Verify arm64e, symbols and bundled PDFs
