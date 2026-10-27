@@ -819,7 +819,7 @@ static void KPGlyphRestoreSignals(struct sigaction oldActions[KP_GLYPH_SIGNAL_CO
     NSMutableString *report = [NSMutableString string];
     [report appendString:@"=== KexProofV3 Glyph Grift safe PDF probe ===\n"];
     [report appendFormat:@"App version: %@\nDevice OS: %@\n",
-     [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.3.1",
+     [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.4.0",
      NSProcessInfo.processInfo.operatingSystemVersionString];
     [report appendString:@"Route: CGPDFDocument -> CGBitmapContext -> CGContextDrawPDFPage; font smoothing disabled. Safe row parses all bundled PDFs but renders only the standard non-extreme control. No armed PDF is rendered here.\n"];
     BOOL allMatched = YES;
@@ -861,7 +861,7 @@ static void KPGlyphRestoreSignals(struct sigaction oldActions[KP_GLYPH_SIGNAL_CO
     NSMutableString *report = [NSMutableString string];
     [report appendString:@"=== KexProofV3 Glyph Grift ARMED render probe ===\n"];
     [report appendFormat:@"App version: %@\nDevice OS: %@\n",
-     [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.3.1",
+     [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.4.0",
      NSProcessInfo.processInfo.operatingSystemVersionString];
     [report appendString:@"Bounded to at most nine renders across direct CGFont, ImageIO thumbnail and natural/scaled CGPDF routes. The old 200->256 g3 route is retained as a negative control. No spray, reclaim, CFData corruption, kernel operation or legacy exploit engine is used.\n"];
     [report appendString:@"WARNING: a CRASH record is evidence for triage, not a proven primitive. RENDERED_SURVIVED or an unchanged local canary does not disprove OOB corruption.\n"];

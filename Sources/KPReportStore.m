@@ -48,7 +48,7 @@ static NSString *KPSafeIdentifier(NSString *identifier) {
     NSMutableString *output = [NSMutableString stringWithFormat:
                                @"=== KexProofV3 consolidated report ===\nCreated: %@\nVersion: %@\n\n--- Current transcript ---\n%@\n",
                                [NSDate date],
-                               [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.3.1",
+                               [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.4.0",
                                KPLog.shared.transcript];
 
     NSArray<NSString *> *files = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:documents error:nil] ?: @[];

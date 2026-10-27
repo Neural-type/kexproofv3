@@ -6,6 +6,7 @@
 #import "KPM2ScalerProbeModule.h"
 #import "KPFuzzModule.h"
 #import "KPGlyphProbeModule.h"
+#import "KPCGType5ProbeModule.h"
 #import "KPLog.h"
 #import "KPLogViewController.h"
 #import "KPReportStore.h"
@@ -49,7 +50,7 @@
     [self configureTable];
     [self updateRunButton];
 
-    NSString *version = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.3.1";
+    NSString *version = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.4.0";
     [KPLog.shared appendFormat:@"=== KexProofV3 %@ started @ %@ ===", version, [NSDate date]];
     [KPLog.shared append:@"Clean iOS 27 research workbench. No exploit engine or legacy binary resources bundled."];
 }
@@ -78,6 +79,8 @@
         [[KPM2ScalerProbeModule alloc] initWithArmed:YES],
         [[KPGlyphProbeModule alloc] initWithArmed:NO],
         [[KPGlyphProbeModule alloc] initWithArmed:YES],
+        [[KPCGType5ProbeModule alloc] initWithArmed:NO],
+        [[KPCGType5ProbeModule alloc] initWithArmed:YES],
         [[KPFuzzModule alloc] initWithArmed:NO],
         [[KPFuzzModule alloc] initWithArmed:YES]
     ];
@@ -95,7 +98,7 @@
     self.headerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 390, 260)];
 
     UILabel *versionLabel = [[UILabel alloc] init];
-    NSString *version = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.3.1";
+    NSString *version = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"3.4.0";
     versionLabel.text = [NSString stringWithFormat:@"KexProofV3 · %@", version];
     versionLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
     versionLabel.textColor = UIColor.labelColor;
@@ -200,6 +203,7 @@
         if ([module.identifier isEqualToString:@"m2scaler27.race"]) continue;
         if ([module.identifier isEqualToString:@"agx27.spill.armed"]) continue;
         if ([module.identifier isEqualToString:@"glyph27.render.armed"]) continue;
+        if ([module.identifier isEqualToString:@"cgtype527.render.armed"]) continue;
         if ([module.identifier isEqualToString:@"iokit.fuzzer.armed"]) continue;
         [safeModules addObject:module];
     }
