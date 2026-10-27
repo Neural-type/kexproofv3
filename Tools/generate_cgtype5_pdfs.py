@@ -16,7 +16,7 @@ def function_object(value):
 def build_pdf(range_dimension):
     if range_dimension < 1:
         raise ValueError("range dimension must be positive")
-    values = [0] * (range_dimension - 1) + [1]
+    values = ["0.5"] if range_dimension == 1 else ["0.5"] + [0] * (range_dimension - 2) + [1]
     function_refs = " ".join(f"{6 + index} 0 R" for index in range(range_dimension))
     stream = bytes(component for row in range(ROWS) for x in range(VERTICES_PER_ROW) for component in (x, row, 0))
     content = b"q\n/S sh\nQ\n"

@@ -69,6 +69,7 @@ jobs:
       - name: Verify arm64e, symbols and bundled PDFs
         working-directory: .
         run: |
+          python3 Tools/generate_cgtype5_pdfs.py --check
           BIN="$(find .theos/_ -path '*/KexProofV3.app/KexProofV3' -type f | head -1)"
           test -f "$BIN"
           python3 - "$BIN" <<'EOF'
