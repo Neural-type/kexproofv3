@@ -61,7 +61,8 @@ jobs:
             -fobjc-arc -O2 -Wall -Wextra -Wno-error -Wno-deprecated-declarations \
             -framework Foundation -framework ImageIO -framework CoreGraphics \
             Tools/heic112621_probe.m -o out/heic112621-probe
-          codesign --sign - --force --timestamp=none out/heic112621-probe
+          codesign --sign - --force --timestamp=none \
+            --entitlements Tools/heic112621_probe.entitlements out/heic112621-probe
           codesign --verify --verbose=2 out/heic112621-probe
           file out/heic112621-probe
 
