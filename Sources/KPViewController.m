@@ -7,6 +7,7 @@
 #import "KPFuzzModule.h"
 #import "KPGlyphProbeModule.h"
 #import "KPCGType5ProbeModule.h"
+#import "KPHEIC112621ProbeModule.h"
 #import "KPLog.h"
 #import "KPLogViewController.h"
 #import "KPReportStore.h"
@@ -81,6 +82,8 @@
         [[KPGlyphProbeModule alloc] initWithArmed:YES],
         [[KPCGType5ProbeModule alloc] initWithArmed:NO],
         [[KPCGType5ProbeModule alloc] initWithArmed:YES],
+        [[KPHEIC112621ProbeModule alloc] initWithArmed:NO],
+        [[KPHEIC112621ProbeModule alloc] initWithArmed:YES],
         [[KPFuzzModule alloc] initWithArmed:NO],
         [[KPFuzzModule alloc] initWithArmed:YES]
     ];
@@ -204,6 +207,7 @@
         if ([module.identifier isEqualToString:@"agx27.spill.armed"]) continue;
         if ([module.identifier isEqualToString:@"glyph27.render.armed"]) continue;
         if ([module.identifier isEqualToString:@"cgtype527.render.armed"]) continue;
+        if ([module.identifier isEqualToString:@"heic112621.height-mismatch"]) continue;
         if ([module.identifier isEqualToString:@"iokit.fuzzer.armed"]) continue;
         [safeModules addObject:module];
     }
