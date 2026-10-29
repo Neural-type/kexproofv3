@@ -48,6 +48,21 @@ jobs:
         run: |
           make package FINALPACKAGE=1 THEOS="$THEOS"
 
+      - name: Build standalone HEIC probe (arm64e)
+        working-directory: .
+        run: |
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          mkdir -p out
+          "$(xcrun --find clang)" \
+            -target arm64e-apple-ios15.0 \
+            -isysroot "$SDK" \
+            -fobjc-arc -O2 -Wall -Wextra -Wno-error -Wno-deprecated-declarations \
+            -framework Foundation -framework ImageIO -framework CoreGraphics \
+            Tools/heic112621_probe.m -o out/heic112621-probe
+          codesign --sign - --force --timestamp=none out/heic112621-probe
+          codesign --verify --verbose=2 out/heic112621-probe
+          file out/heic112621-probe
+
       - name: Sign + package IPA
         working-directory: .
         run: |
@@ -93,4 +108,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: KexProofV3-arm64e
-          path: out/KexProofV3-arm64e.ipa
+          path: |
+            out/KexProofV3-arm64e.ipa
+            out/heic112621-probe
