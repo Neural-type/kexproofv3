@@ -38,6 +38,8 @@ jobs:
             -DKP_IOKIT_FUZZER_ENABLE_ARMED=1 \
             -DKP_GLYPH27_ENABLE_ARMED=1 \
             -DKP_CGTYPE527_ENABLE_ARMED=1 \
+            -DKP_CGTYPE5STACK_ENABLE_ARMED=1 \
+            -DKP_DOVIRPU_ENABLE_ARMED=1 \
             -DKP_HEIC112621_ENABLE_ARMED=1 \
             Sources/*.m
 
