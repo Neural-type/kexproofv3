@@ -99,7 +99,7 @@ static NSString *KPAVEStop(int journalFD, VTCompressionSessionRef session, CVPix
     [report appendFormat:@"=== KexProofV3 AVE 112705 NTL %lu ===\nDevice OS: %@\nJournal: %@\n",
      (unsigned long)temporalLayers, NSProcessInfo.processInfo.operatingSystemVersionString, journalPath];
     KPAVEJournalLine(journalFD, [NSString stringWithFormat:
-                                  @"BEGIN id=ave112705 ntl=%lu width=1280 height=720 codec=hvc1 encoderUsage=1 rcMode=20 realTime=false os=%@",
+                                  @"BEGIN id=ave112705 ntl=%lu width=1280 height=720 codec=hvc1 encoderUsage=1 rcMode=default realTime=false os=%@",
                                   (unsigned long)temporalLayers, NSProcessInfo.processInfo.operatingSystemVersionString]);
 
     VTCompressionSessionRef session = NULL;
@@ -115,10 +115,7 @@ static NSString *KPAVEStop(int journalFD, VTCompressionSessionRef session, CVPix
     KPAVELogSetStatus(journalFD, @"EncoderUsage", status);
     if (status != 0) return KPAVEStop(journalFD, session, pixel, status, @"SET_EncoderUsage", report);
 
-    KPAVEJournalLine(journalFD, @"BEFORE_SET key=RCMode value=20");
-    status = VTSessionSetProperty(session, CFSTR("RCMode"), (__bridge CFTypeRef)@(20));
-    KPAVELogSetStatus(journalFD, @"RCMode", status);
-    if (status != 0) return KPAVEStop(journalFD, session, pixel, status, @"SET_RCMode", report);
+    KPAVEJournalLine(journalFD, @"SKIP_SET key=RCMode reason=unsupported-on-target");
 
     KPAVEJournalLine(journalFD, @"BEFORE_SET key=RealTime value=false");
     status = VTSessionSetProperty(session, kVTCompressionPropertyKey_RealTime, kCFBooleanFalse);
