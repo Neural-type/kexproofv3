@@ -1,5 +1,6 @@
 #import "KPViewController.h"
 #import "KPDeviceInfoModule.h"
+#import "KPAVE112705ProbeModule.h"
 #import "KPAGXSpillProbeModule.h"
 #import "KPIOSurfaceProbeModule.h"
 #import "KPIOAudioCodecsProbeModule.h"
@@ -91,6 +92,9 @@
         [[KPDOVIRPUProbeModule alloc] initWithArmed:YES],
         [[KPHEIC112621ProbeModule alloc] initWithArmed:NO],
         [[KPHEIC112621ProbeModule alloc] initWithArmed:YES],
+        [[KPAVE112705ProbeModule alloc] initWithTemporalLayers:1],
+        [[KPAVE112705ProbeModule alloc] initWithTemporalLayers:16462],
+        [[KPAVE112705ProbeModule alloc] initWithTemporalLayers:16463],
         [[KPFuzzModule alloc] initWithArmed:NO],
         [[KPFuzzModule alloc] initWithArmed:YES]
     ];
@@ -218,6 +222,8 @@
         if ([module.identifier isEqualToString:@"cgtype5.stack.sweep"]) continue;
         if ([module.identifier isEqualToString:@"dovirpu112688.array-overflow"]) continue;
         if ([module.identifier isEqualToString:@"heic112621.height-mismatch"]) continue;
+        if ([module.identifier isEqualToString:@"ave112705.ntl-16462"]) continue;
+        if ([module.identifier isEqualToString:@"ave112705.ntl-16463"]) continue;
         if ([module.identifier isEqualToString:@"iokit.fuzzer.armed"]) continue;
         [safeModules addObject:module];
     }
