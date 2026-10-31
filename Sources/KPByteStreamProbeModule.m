@@ -13,9 +13,14 @@
 #define KP_BS_MAX_FILE_SIZE (16 * 1024 * 1024)
 #define KP_BS_REPLY_TIMEOUT 8
 
+#if __has_include(<xpc/xpc.h>)
+#import <xpc/xpc.h>
+#define KP_BS_HAS_XPC_HEADERS 1
+#else
+#define KP_BS_HAS_XPC_HEADERS 0
 typedef void *xpc_object_t;
+typedef void *xpc_type_t;
 typedef xpc_object_t xpc_connection_t;
-
 extern xpc_connection_t xpc_connection_create_mach_service(const char *name, dispatch_queue_t targetQueue, uint64_t flags);
 extern void xpc_connection_set_event_handler(xpc_connection_t connection, void (^handler)(xpc_object_t event));
 extern void xpc_connection_resume(xpc_connection_t connection);
@@ -25,11 +30,28 @@ extern xpc_object_t xpc_dictionary_get_value(xpc_object_t dictionary, const char
 extern uint64_t xpc_dictionary_get_uint64(xpc_object_t dictionary, const char *key);
 extern void xpc_dictionary_set_uint64(xpc_object_t dictionary, const char *key, uint64_t value);
 extern int xpc_dictionary_dup_fd(xpc_object_t dictionary, const char *key);
-extern xpc_object_t xpc_get_type(xpc_object_t object);
-extern const char *xpc_type_get_name(xpc_object_t type);
+extern xpc_type_t xpc_get_type(xpc_object_t object);
+extern const char *xpc_type_get_name(xpc_type_t type);
 extern char *xpc_copy_description(xpc_object_t object);
 extern xpc_object_t xpc_retain(xpc_object_t object);
 extern void xpc_release(xpc_object_t object);
+#endif
+
+#if KP_BS_HAS_XPC_HEADERS && OS_OBJECT_USE_OBJC
+#define KP_BS_XPC_ARC 1
+static xpc_object_t KPBSRetain(xpc_object_t object) {
+    return object;
+}
+static void KPBSRelease(xpc_object_t object) {
+    (void)object;
+}
+#undef xpc_retain
+#define xpc_retain(object) KPBSRetain(object)
+#undef xpc_release
+#define xpc_release(object) KPBSRelease(object)
+#else
+#define KP_BS_XPC_ARC 0
+#endif
 
 typedef int32_t (*KPBSBasicMessage)(uint32_t operation, uint64_t argument, xpc_object_t *message);
 typedef int32_t (*KPBSOriginBegin)(xpc_object_t message);
@@ -73,7 +95,7 @@ static void KPBSResolveAPI(void) {
 
 static NSString *KPBSTypeName(xpc_object_t object) {
     if (!object) return @"nil";
-    xpc_object_t type = xpc_get_type(object);
+    xpc_type_t type = xpc_get_type(object);
     const char *name = type ? xpc_type_get_name(type) : NULL;
     return name ? [NSString stringWithUTF8String:name] : @"unknown";
 }
@@ -111,7 +133,11 @@ static NSString *KPBSSHA256(NSData *data) {
 @interface KPByteStreamSession : NSObject
 @property (nonatomic, assign) int journalFD;
 @property (nonatomic, strong) NSMutableString *report;
+#if KP_BS_XPC_ARC
+@property (nonatomic, strong) xpc_connection_t connection;
+#else
 @property (nonatomic, assign) xpc_connection_t connection;
+#endif
 @property (nonatomic, assign) CFTypeRef memoryRecipient;
 @property (nonatomic, assign) CFTypeRef memoryOrigin;
 @property (nonatomic, assign) BOOL handshakeReady;
