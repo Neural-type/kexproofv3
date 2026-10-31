@@ -11,6 +11,8 @@
 #import "KPCGType5StackProbeModule.h"
 #import "KPDOVIRPUProbeModule.h"
 #import "KPHEIC112621ProbeModule.h"
+#import "KPCMCA27ProbeModule.h"
+#import "KPByteStreamProbeModule.h"
 #import "KPLog.h"
 #import "KPLogViewController.h"
 #import "KPReportStore.h"
@@ -95,6 +97,12 @@
         [[KPAVE112705ProbeModule alloc] initWithTemporalLayers:1],
         [[KPAVE112705ProbeModule alloc] initWithTemporalLayers:16462],
         [[KPAVE112705ProbeModule alloc] initWithTemporalLayers:16463],
+        [[KPCMCA27ProbeModule alloc] initWithArmed:NO component:0],
+        [[KPCMCA27ProbeModule alloc] initWithArmed:YES component:0],
+        [[KPCMCA27ProbeModule alloc] initWithArmed:NO component:1],
+        [[KPCMCA27ProbeModule alloc] initWithArmed:YES component:1],
+        [[KPByteStreamProbeModule alloc] initWithArmed:NO],
+        [[KPByteStreamProbeModule alloc] initWithArmed:YES],
         [[KPFuzzModule alloc] initWithArmed:NO],
         [[KPFuzzModule alloc] initWithArmed:YES]
     ];
@@ -224,6 +232,9 @@
         if ([module.identifier isEqualToString:@"heic112621.height-mismatch"]) continue;
         if ([module.identifier isEqualToString:@"ave112705.ntl-16462"]) continue;
         if ([module.identifier isEqualToString:@"ave112705.ntl-16463"]) continue;
+        if ([module.identifier isEqualToString:@"cm113950.mmr3"]) continue;
+        if ([module.identifier isEqualToString:@"ca113912.ac3-n1800"]) continue;
+        if ([module.identifier isEqualToString:@"bytestream27.global-preferences"]) continue;
         if ([module.identifier isEqualToString:@"iokit.fuzzer.armed"]) continue;
         [safeModules addObject:module];
     }

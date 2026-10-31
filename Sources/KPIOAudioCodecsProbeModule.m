@@ -308,7 +308,7 @@ static KPAudioProcessResult KPAudioProcess(KPAudioSession *session,
     result.count = 2;
     if (armed) {
         [KPLog.shared appendFormat:
-         @"IOAudioCodecs ARMED selector 5: offset=0 N=0x%x B=A=0x%x; expected old-path trailing memset size=0xfffffff8",
+         @"IOAudioCodecs ARMED selector 5: offset=0 N=0x%x B=A=0x%x; expected old-path trailing memset size=0xfffffffffffffff8",
          packetLength, KP_AUDIO_PACKET_CAPACITY];
         [report appendString:@"  ARMED call issued: selector 5, N=B=A=0x1800, no spray, no KRW.\n"];
     }
