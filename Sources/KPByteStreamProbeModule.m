@@ -58,6 +58,7 @@ typedef int32_t (*KPBSOriginBegin)(xpc_object_t message);
 typedef int32_t (*KPBSOriginComplete)(xpc_object_t reply, CFTypeRef *origin);
 typedef int32_t (*KPBSRecipientCreate)(xpc_object_t rp1Reply, xpc_object_t rp2Message, const char *name, CFTypeRef *recipient);
 typedef int32_t (*KPBSMessageSetURL)(xpc_object_t message, const char *key, CFURLRef URL);
+typedef xpc_connection_t (*KPBSConnectionCreate)(const char *name, dispatch_queue_t targetQueue, uint64_t flags);
 
 typedef struct {
     KPBSBasicMessage basic;
@@ -65,6 +66,7 @@ typedef struct {
     KPBSOriginComplete originComplete;
     KPBSRecipientCreate recipientCreate;
     KPBSMessageSetURL setURL;
+    KPBSConnectionCreate connectionCreate;
     BOOL ready;
     NSString *error;
 } KPBSFigAPI;
@@ -84,9 +86,10 @@ static void KPBSResolveAPI(void) {
         gBSAPI.originComplete = (KPBSOriginComplete)dlsym(handle, "FigMemoryOriginCompleteEstablishingMemoryRecipientUsingXPCMessage2");
         gBSAPI.recipientCreate = (KPBSRecipientCreate)dlsym(handle, "FigMemoryRecipientCreateWithXPCMessage1AndUpdateXPCMessage2");
         gBSAPI.setURL = (KPBSMessageSetURL)dlsym(handle, "FigXPCMessageSetCFURL");
-        if (!gBSAPI.basic || !gBSAPI.originBegin || !gBSAPI.originComplete || !gBSAPI.recipientCreate || !gBSAPI.setURL) {
-            gBSAPI.error = [NSString stringWithFormat:@"missing symbols basic=%p begin=%p complete=%p recipient=%p setURL=%p",
-                            gBSAPI.basic, gBSAPI.originBegin, gBSAPI.originComplete, gBSAPI.recipientCreate, gBSAPI.setURL];
+        gBSAPI.connectionCreate = (KPBSConnectionCreate)dlsym(RTLD_DEFAULT, "xpc_connection_create_mach_service");
+        if (!gBSAPI.basic || !gBSAPI.originBegin || !gBSAPI.originComplete || !gBSAPI.recipientCreate || !gBSAPI.setURL || !gBSAPI.connectionCreate) {
+            gBSAPI.error = [NSString stringWithFormat:@"missing symbols basic=%p begin=%p complete=%p recipient=%p setURL=%p connectionCreate=%p",
+                            gBSAPI.basic, gBSAPI.originBegin, gBSAPI.originComplete, gBSAPI.recipientCreate, gBSAPI.setURL, gBSAPI.connectionCreate];
             return;
         }
         gBSAPI.ready = YES;
@@ -420,7 +423,7 @@ static NSString *KPBSSHA256(NSData *data) {
         [session log:@"JOURNAL path=%@", journalPath];
         [session log:@"SYMBOLS ready=%d error=%@", gBSAPI.ready, gBSAPI.error ?: @"none"];
         if (!gBSAPI.ready) return session.report;
-        session.connection = xpc_connection_create_mach_service("com.apple.coremedia.mediaplaybackd.bytestream.xpc", NULL, 0);
+        session.connection = gBSAPI.connectionCreate("com.apple.coremedia.mediaplaybackd.bytestream.xpc", NULL, 0);
         [session log:@"XPC_CREATE connection=%p", session.connection];
         if (!session.connection) return session.report;
         __weak KPByteStreamSession *weakSession = session;
