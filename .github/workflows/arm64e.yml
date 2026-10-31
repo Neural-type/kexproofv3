@@ -43,6 +43,7 @@ jobs:
             -DKP_HEIC112621_ENABLE_ARMED=1 \
             -DKP_AVE112705_ENABLE_ARMED=1 \
             -DKP_CMCA27_ENABLE_ARMED=1 \
+            -DKP_BPF84495_ENABLE_ARMED=1 \
             Sources/*.m
 
       - name: Build KexProofV3 (arm64e)
@@ -103,7 +104,7 @@ jobs:
           assert cputype == 0x100000C, hex(cputype)
           assert subtype == 0x80000002, hex(subtype)
           EOF
-          nm -a "$BIN" | grep -E 'KPAVE112705ProbeModule|KPHEIC112621ProbeModule|KPGlyphProbeModule|KPCGType5ProbeModule|KPByteStreamProbeModule|KPFuzz(Module|Plan|Support)|KPViewController' >/dev/null
+          nm -a "$BIN" | grep -E 'KPAVE112705ProbeModule|KPHEIC112621ProbeModule|KPGlyphProbeModule|KPCGType5ProbeModule|KPByteStreamProbeModule|KPBPFProbeModule|KPFuzz(Module|Plan|Support)|KPViewController' >/dev/null
           APP="$(dirname "$BIN")"
           for PDF in glyph-benign.pdf glyph-g3.pdf glyph-calif-trigger.pdf glyph-trigger.pdf glyph-g1.pdf glyph-w1a.pdf glyph-w4b.pdf glyph-curve.pdf glyph-tm075.pdf cgtype5-benign.pdf cgtype5-r6-heap.pdf; do
             test -s "$APP/$PDF"
