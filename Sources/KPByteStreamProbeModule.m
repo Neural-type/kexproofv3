@@ -373,6 +373,8 @@ static NSString *KPBSSHA256(NSData *data) {
 @property (nonatomic, copy, readwrite) NSString *subtitle;
 @property (nonatomic, copy, readwrite) NSString *icon;
 @property (nonatomic, assign, readwrite) KPTestSection section;
+@property (nonatomic, copy) NSString *targetPath;
+@property (nonatomic, copy) NSString *sessionName;
 @end
 
 @implementation KPByteStreamProbeModule
@@ -388,20 +390,41 @@ static NSString *KPBSSHA256(NSData *data) {
             : @"Memory-origin handshake · /etc/hosts · direct-open control";
         _icon = armed ? @"doc.text.magnifyingglass" : @"network";
         _section = KPTestSectionKernelProbes;
+        _targetPath = armed
+            ? @"/private/var/mobile/Library/Preferences/.GlobalPreferences.plist"
+            : @"/etc/hosts";
+        _sessionName = armed ? @"armed" : @"baseline";
+    }
+    return self;
+}
+
+- (instancetype)initWithTargetPath:(NSString *)targetPath sessionName:(NSString *)sessionName {
+    self = [super init];
+    if (self) {
+        _armed = YES;
+        _targetPath = [targetPath copy];
+        _sessionName = [sessionName copy];
+        _identifier = [@"bytestream27." stringByAppendingString:sessionName];
+        _title = [NSString stringWithFormat:@"ByteStream Read %@", targetPath.lastPathComponent];
+        _subtitle = @"Explicit tap · read-only Curl · cross-container target";
+        _icon = @"doc.text.magnifyingglass";
+        _section = KPTestSectionKernelProbes;
     }
     return self;
 }
 
 - (NSString *)runReport {
     KPBSResolveAPI();
-    NSString *targetPath = self.isArmed
-        ? @"/private/var/mobile/Library/Preferences/.GlobalPreferences.plist"
-        : @"/etc/hosts";
-    NSString *mode = self.isArmed ? @"armed" : @"baseline";
+    NSString *targetPath = self.targetPath;
+    NSString *mode = self.sessionName;
     NSString *documents = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents"];
     NSString *journalPath = [documents stringByAppendingPathComponent:
                              [NSString stringWithFormat:@"kexproofv3-bytestream-%@-journal.log", mode]];
-    NSString *outputName = self.isArmed ? @"bytestream-armed-GlobalPreferences.plist" : @"bytestream-baseline-hosts";
+    NSString *outputName = [mode isEqualToString:@"armed"]
+        ? @"bytestream-armed-GlobalPreferences.plist"
+        : [mode isEqualToString:@"baseline"]
+            ? @"bytestream-baseline-hosts"
+            : [@"bytestream-" stringByAppendingString:targetPath.lastPathComponent];
     NSURL *outputURL = [NSURL fileURLWithPath:[documents stringByAppendingPathComponent:outputName]];
     NSMutableString *initialReport = [NSMutableString string];
     NSError *directoryError = nil;

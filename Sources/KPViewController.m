@@ -103,6 +103,9 @@
         [[KPCMCA27ProbeModule alloc] initWithArmed:YES component:1],
         [[KPByteStreamProbeModule alloc] initWithArmed:NO],
         [[KPByteStreamProbeModule alloc] initWithArmed:YES],
+        [[KPByteStreamProbeModule alloc] initWithTargetPath:@"/private/var/mobile/Media/iTunes_Control/iTunes/MediaLibrary.sqlitedb" sessionName:@"medialibrary"],
+        [[KPByteStreamProbeModule alloc] initWithTargetPath:@"/private/var/mobile/Media/iTunes_Control/iTunes/MediaLibrary.sqlitedb-wal" sessionName:@"medialibrary-wal"],
+        [[KPByteStreamProbeModule alloc] initWithTargetPath:@"/usr/libexec/mediaplaybackd" sessionName:@"mediaplaybackd-binary"],
         [[KPFuzzModule alloc] initWithArmed:NO],
         [[KPFuzzModule alloc] initWithArmed:YES]
     ];
@@ -235,6 +238,9 @@
         if ([module.identifier isEqualToString:@"cm113950.mmr3"]) continue;
         if ([module.identifier isEqualToString:@"ca113912.ac3-n1800"]) continue;
         if ([module.identifier isEqualToString:@"bytestream27.global-preferences"]) continue;
+        if ([module.identifier isEqualToString:@"bytestream27.medialibrary"]) continue;
+        if ([module.identifier isEqualToString:@"bytestream27.medialibrary-wal"]) continue;
+        if ([module.identifier isEqualToString:@"bytestream27.mediaplaybackd-binary"]) continue;
         if ([module.identifier isEqualToString:@"iokit.fuzzer.armed"]) continue;
         [safeModules addObject:module];
     }
