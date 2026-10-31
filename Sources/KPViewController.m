@@ -15,6 +15,7 @@
 #import "KPByteStreamProbeModule.h"
 #import "KPBPFProbeModule.h"
 #import "KPCoWProbeModule.h"
+#import "KPAppIntents112692ProbeModule.h"
 #import "KPLog.h"
 #import "KPLogViewController.h"
 #import "KPReportStore.h"
@@ -109,6 +110,7 @@
         [[KPBPFProbeModule alloc] initWithArmed:YES],
         [[KPCoWProbeModule alloc] initWithArmed:NO],
         [[KPCoWProbeModule alloc] initWithArmed:YES],
+        [[KPAppIntents112692ProbeModule alloc] init],
         [[KPByteStreamProbeModule alloc] initWithTargetPath:@"/private/var/mobile/Media/iTunes_Control/iTunes/MediaLibrary.sqlitedb" sessionName:@"medialibrary"],
         [[KPByteStreamProbeModule alloc] initWithTargetPath:@"/private/var/mobile/Media/iTunes_Control/iTunes/MediaLibrary.sqlitedb-wal" sessionName:@"medialibrary-wal"],
         [[KPByteStreamProbeModule alloc] initWithTargetPath:@"/usr/libexec/mediaplaybackd" sessionName:@"mediaplaybackd-binary"],
