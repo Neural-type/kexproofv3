@@ -14,6 +14,7 @@
 #import "KPCMCA27ProbeModule.h"
 #import "KPByteStreamProbeModule.h"
 #import "KPBPFProbeModule.h"
+#import "KPCoWProbeModule.h"
 #import "KPLog.h"
 #import "KPLogViewController.h"
 #import "KPReportStore.h"
@@ -106,6 +107,8 @@
         [[KPByteStreamProbeModule alloc] initWithArmed:YES],
         [[KPBPFProbeModule alloc] initWithArmed:NO],
         [[KPBPFProbeModule alloc] initWithArmed:YES],
+        [[KPCoWProbeModule alloc] initWithArmed:NO],
+        [[KPCoWProbeModule alloc] initWithArmed:YES],
         [[KPByteStreamProbeModule alloc] initWithTargetPath:@"/private/var/mobile/Media/iTunes_Control/iTunes/MediaLibrary.sqlitedb" sessionName:@"medialibrary"],
         [[KPByteStreamProbeModule alloc] initWithTargetPath:@"/private/var/mobile/Media/iTunes_Control/iTunes/MediaLibrary.sqlitedb-wal" sessionName:@"medialibrary-wal"],
         [[KPByteStreamProbeModule alloc] initWithTargetPath:@"/usr/libexec/mediaplaybackd" sessionName:@"mediaplaybackd-binary"],
@@ -245,6 +248,7 @@
         if ([module.identifier isEqualToString:@"bytestream27.medialibrary-wal"]) continue;
         if ([module.identifier isEqualToString:@"bytestream27.mediaplaybackd-binary"]) continue;
         if ([module.identifier isEqualToString:@"bpf84495.race"]) continue;
+        if ([module.identifier isEqualToString:@"cow112576.race"]) continue;
         if ([module.identifier isEqualToString:@"iokit.fuzzer.armed"]) continue;
         [safeModules addObject:module];
     }
